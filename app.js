@@ -29,7 +29,144 @@ fetch(API_URL)
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     prepararTopologia(data);
-    renderizarGrafo(data);
+// ==============================================================================
+// 3. RENDERIZADO 3D CON DERIVA ORGÁNICA Y ROTACIÓN CÓSMICA
+// ==============================================================================
+function renderizarGrafo(data) {
+  const geoSphere = new THREE.SphereGeometry(1, 28, 28);
+  const geoHalo = new THREE.SphereGeometry(1, 20, 20);
+
+  Graph = ForceGraph3D()(document.getElementById('graph-container'))
+    .graphData(data)
+    .backgroundColor('#030712')
+    .showNavInfo(false)
+
+    // --- MOVIMIENTO CONTINUO Y RELAJADO ---
+    .cooldownTicks(Infinity)           // Mantiene la física viva indefinidamente
+    .cooldownTime(Infinity)
+    .d3AlphaDecay(0.002)               // Disipación ultra lenta (deriva constante)
+    .d3VelocityDecay(0.25)             // Resistencia viscosa para movimientos suaves
+
+    // --- ENLACES CURVOS ORGÁNICOS ---
+    .linkCurvature(0.2)
+    .linkCurveRotation(0.3)
+    .linkColor(link => {
+      const hayFoco = highlightNodes.size > 0;
+      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.15)' : 'rgba(56, 189, 248, 0.22)');
+    })
+    .linkOpacity(0.75)
+    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.9)
+    .linkDirectionalParticles(link => highlightLinks.has(link) ? 3 : 1)
+    .linkDirectionalParticleSpeed(0.003)
+    .linkDirectionalParticleWidth(link => highlightLinks.has(link) ? 2.2 : 1.1)
+    .linkDirectionalParticleColor(() => '#ffffff')
+
+    // --- NODOS ---
+    .nodeThreeObject(node => {
+      const group = new THREE.Group();
+      const baseColor = new THREE.Color(node.color);
+      const size = node.val;
+      const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
+
+      const matSphere = new THREE.MeshLambertMaterial({
+        color: baseColor,
+        emissive: baseColor,
+        emissiveIntensity: 0.6,
+        transparent: true,
+        opacity: 0.95
+      });
+      const meshSphere = new THREE.Mesh(geoSphere, matSphere);
+      meshSphere.scale.set(size * 0.45, size * 0.45, size * 0.45);
+      group.add(meshSphere);
+
+      const matHalo = new THREE.MeshBasicMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: esRaiz ? 0.35 : 0.18,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide
+      });
+      const meshHalo = new THREE.Mesh(geoHalo, matHalo);
+      meshHalo.scale.set(size * 0.9, size * 0.9, size * 0.9);
+      group.add(meshHalo);
+
+      const sprite = new SpriteText(node.name || node.id);
+      sprite.color = esRaiz ? '#ffffff' : node.color;
+      sprite.textHeight = esRaiz ? 3.8 : Math.max(2.2, size * 0.3);
+      sprite.position.y = size * 0.7 + 3.0;
+      sprite.fontFace = "'Rajdhani', sans-serif";
+      sprite.fontWeight = '700';
+      sprite.strokeColor = '#030712';
+      sprite.strokeWidth = 1.2;
+      group.add(sprite);
+
+      return group;
+    })
+
+    // --- INTERACCIONES ---
+    .onNodeClick(node => {
+      document.getElementById('card-title').innerText = node.name;
+      document.getElementById('card-id').innerText = node.id;
+      document.getElementById('card-desc').innerText = node.axioma || node.ordinario || 'Axioma ontológico';
+      
+      const btnDoc = document.getElementById('btn-doc');
+      if (node.url && node.url.includes('http')) {
+        btnDoc.href = node.url;
+        btnDoc.style.display = 'inline-block';
+      } else {
+        btnDoc.style.display = 'none';
+      }
+      
+      document.getElementById('info-card').style.display = 'block';
+      generarRadarECharts(node);
+
+      highlightNodes.clear();
+      highlightLinks.clear();
+      highlightNodes.add(node);
+      if (node.neighbors) node.neighbors.forEach(v => highlightNodes.add(v));
+      if (node.links) node.links.forEach(l => highlightLinks.add(l));
+      
+      actualizarFiltroVisual(); 
+      const distRatio = 1 + 45 / Math.hypot(node.x, node.y, node.z);
+      Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 2000);
+    })
+    .onBackgroundClick(() => {
+      document.getElementById('info-card').style.display = 'none';
+      highlightNodes.clear();
+      highlightLinks.clear();
+      actualizarFiltroVisual();
+    });
+
+  // --- EQUILIBRIO DE FUERZAS CÓSMICAS ---
+  // Repulsión amplia para que ocupen todo el volumen sin amontonarse
+  Graph.d3Force('charge').strength(-320);
+  Graph.d3Force('link').distance(link => {
+    const esCentral = link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco';
+    return esCentral ? 190 : 95;
+  });
+
+  // --- ROTACIÓN ORBITAL PERPETUA ---
+  const controls = Graph.controls();
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.5; // Velocidad de giro relajada
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+
+  // --- PULSO DE DERIVA (MOVIMIENTO FLOTANTE CONSTANTE) ---
+  let t = 0;
+  (function animarOndulacion() {
+    t += 0.015;
+    // Agrega una pequeña perturbación sinusoidal a los nodos periféricos
+    data.nodes.forEach((node, idx) => {
+      if (node.id !== 'Omni-Eco') {
+        node.vx += Math.sin(t + idx) * 0.08;
+        node.vy += Math.cos(t + idx * 0.7) * 0.08;
+        node.vz += Math.sin(t * 0.5 + idx) * 0.08;
+      }
+    });
+    requestAnimationFrame(animarOndulacion);
+  })();
+}
   })
   .catch(err => {
     document.getElementById('loading').innerText = 'ERROR DE CONEXIÓN: ' + err.message;
