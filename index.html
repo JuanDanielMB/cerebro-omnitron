@@ -3,12 +3,22 @@
 <head>
   <meta charset="utf-8">
   <title>Cerebro Digital - Axiomatic Ontology Graph</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
   <style>
+    :root {
+      --bg-color: #07090e;
+      --cyan-neon: #00f5d4;
+      --blue-neon: #38bdf8;
+      --panel-bg: rgba(10, 15, 24, 0.85);
+      --glass-border: rgba(56, 189, 248, 0.3);
+    }
+
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #07090e;
+      background-color: var(--bg-color);
       font-family: 'Segoe UI', Arial, sans-serif;
     }
     
@@ -28,7 +38,9 @@
     #graph-container {
       width: 100vw;
       height: 100vh;
-      position: relative;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
 
     #loading {
@@ -36,8 +48,8 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: #00f5d4;
-      font-size: 24px;
+      color: var(--cyan-neon);
+      font-size: 22px;
       font-weight: 300;
       letter-spacing: 2px;
       z-index: 200;
@@ -45,14 +57,14 @@
       text-shadow: 0 0 10px rgba(0, 245, 212, 0.5);
     }
 
-    /* Buscador Holográfico */
+    /* Panel Holográfico Superior (Buscador) */
     .search-panel {
       position: absolute;
       top: 25px;
       right: 30px;
       z-index: 100;
-      background: rgba(10, 15, 24, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      background: var(--panel-bg);
+      border: 1px solid var(--glass-border);
       border-radius: 8px;
       padding: 10px 14px;
       backdrop-filter: blur(10px);
@@ -72,7 +84,7 @@
     }
     .search-panel button {
       padding: 6px 12px;
-      background: #00f5d4;
+      background: var(--cyan-neon);
       border: none;
       color: #07090e;
       border-radius: 4px;
@@ -81,31 +93,41 @@
       font-size: 13px;
       transition: 0.2s;
     }
-    .search-panel button:hover { background: #38bdf8; }
+    .search-panel button:hover { background: var(--blue-neon); }
 
-    /* Tarjeta Holográfica de Nodo */
+    /* Tarjeta Contextual (Información + ECharts) */
     #info-card {
       position: absolute;
-      bottom: 30px;
-      right: 30px;
-      background: rgba(10, 15, 24, 0.88);
-      border: 1px solid rgba(56, 189, 248, 0.4);
+      bottom: 25px;
+      right: 25px;
+      background: rgba(10, 15, 24, 0.92);
+      border: 1px solid var(--glass-border);
       border-radius: 8px;
-      padding: 18px 22px;
+      padding: 16px 20px;
       color: #e2e8f0;
-      max-width: 340px;
+      width: 320px;
       display: none;
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
       box-shadow: 0 0 30px rgba(0, 245, 212, 0.2);
       z-index: 100;
     }
-    #info-card h4 { margin: 0 0 6px 0; color: #38bdf8; font-size: 17px; font-weight: 600; }
-    #info-card p { margin: 5px 0; font-size: 13px; color: #94a3b8; line-height: 1.4; }
+    #info-card h4 { margin: 0 0 4px 0; color: var(--blue-neon); font-size: 16px; font-weight: 600; }
+    #info-card p { margin: 4px 0; font-size: 13px; color: #94a3b8; line-height: 1.4; }
     #info-card .highlight { color: #ffffff; font-weight: 600; }
+    
+    #echarts-radar {
+      width: 100%;
+      height: 170px;
+      margin-top: 10px;
+      border-radius: 6px;
+      background: rgba(7, 9, 14, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
     #btn-doc {
       display: inline-block;
-      margin-top: 10px;
-      color: #00f5d4;
+      margin-top: 12px;
+      color: var(--cyan-neon);
       text-decoration: none;
       font-size: 12px;
       font-weight: bold;
@@ -118,10 +140,12 @@
     #btn-doc:hover { background: rgba(0, 245, 212, 0.25); }
   </style>
 
-  <!-- Librerías de Vanguardia para el renderizado visual avanzado -->
+  <!-- Librerías de Renderizado 3D y Analítica -->
   <script src="https://unpkg.com/three@0.136.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
+  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
   <div id="title-header">Cerebro Digital</div>
@@ -136,6 +160,7 @@
     <h4 id="card-title">Nodo</h4>
     <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
     <p><span class="highlight">Axioma:</span> <span id="card-desc"></span></p>
+    <div id="echarts-radar"></div>
     <a id="btn-doc" href="#" target="_blank">Abrir Fuente en Drive ↗</a>
   </div>
 
@@ -143,33 +168,29 @@
 
   <script>
     let Graph;
-    let nodoActual = null;
+    let myChart = null; 
     const highlightNodes = new Set();
     const highlightLinks = new Set();
 
-    // URL de tu API de Apps Script desplegada como Aplicación Web
+    // 🔴 RECUERDA: Coloca aquí tu URL de la Aplicación Web de Google Apps Script
     const API_URL = 'https://script.google.com/macros/s/TU_ID_DE_DESPLIEGUE_AQUI/exec';
 
-    // Petición fetch en vivo al ecosistema de Google Sheets / Drive
+    // 1. INICIALIZACIÓN Y FETCH
     fetch(API_URL)
       .then(response => response.json())
       .then(data => {
         document.getElementById('loading').style.display = 'none';
+        prepararTopologia(data);
         renderizarGrafo(data);
       })
       .catch(err => {
-        document.getElementById('loading').innerText = 'Error de sincronización: ' + err.message;
+        document.getElementById('loading').innerText = 'Error de conexión: ' + err.message;
       });
 
-    function limpiarColor(colorCrudo) {
-      if (!colorCrudo) return '#00f5d4';
-      let c = colorCrudo.toString().trim();
-      if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(c)) return c;
-      return '#00f5d4'; 
-    }
-
-    function renderizarGrafo(data) {
-      // Mapeo topológico de vecinos y enlaces
+    // 2. PROCESAMIENTO D3 Y TOPOLOGÍA (Optimizado en 1 solo ciclo)
+    function prepararTopologia(data) {
+      const counts = {};
+      
       data.links.forEach(link => {
         const a = data.nodes.find(n => n.id === link.source);
         const b = data.nodes.find(n => n.id === link.target);
@@ -183,68 +204,85 @@
           if (!b.links) b.links = [];
           a.links.push(link);
           b.links.push(link);
+
+          counts[link.source] = (counts[link.source] || 0) + 1;
+          counts[link.target] = (counts[link.target] || 0) + 1;
         }
       });
 
-      const elem = document.getElementById('graph-container');
-      Graph = ForceGraph3D()(elem)
+      // Escala Matemática D3
+      const maxConex = d3.max(Object.values(counts)) || 10;
+      const scaleRadius = d3.scaleLinear().domain([1, maxConex]).range([8, 22]);
+
+      data.nodes.forEach(n => {
+        n.degree = counts[n.id] || 1;
+        n.val = scaleRadius(n.degree);
+      });
+    }
+
+    // 3. RENDERIZADO 3D (WebGL Optimizado)
+    function renderizarGrafo(data) {
+      // Geometrías Maestras (Ahorro de Memoria RAM)
+      const geoSphere = new THREE.SphereGeometry(1, 24, 24);
+      const geoHalo = new THREE.SphereGeometry(1, 16, 16);
+
+      Graph = ForceGraph3D()(document.getElementById('graph-container'))
         .graphData(data)
         .backgroundColor('#07090e')
         .showNavInfo(false)
         
-        // 🌟 Nodos con Estética Ontológica (Esfera + Halo Glow + Texto Flotante)
+        // --- CONSTRUCCIÓN VISUAL DE NODOS ---
         .nodeThreeObject(node => {
           const group = new THREE.Group();
-          const hexColor = limpiarColor(node.color);
-          const baseColor = new THREE.Color(hexColor);
-          const size = node.val || 10;
+          const baseColor = new THREE.Color(node.color || '#00f5d4');
+          const size = node.val;
 
-          // 1. Núcleo esférico
-          const sphereGeo = new THREE.SphereGeometry(size * 0.45, 24, 24);
-          const sphereMat = new THREE.MeshBasicMaterial({
-            color: baseColor,
-            transparent: true,
-            opacity: 0.95
-          });
-          group.add(new THREE.Mesh(sphereGeo, sphereMat));
+          // Núcleo
+          const matSphere = new THREE.MeshBasicMaterial({ color: baseColor, transparent: true, opacity: 0.95 });
+          const meshSphere = new THREE.Mesh(geoSphere, matSphere);
+          meshSphere.scale.set(size * 0.45, size * 0.45, size * 0.45);
+          group.add(meshSphere);
 
-          // 2. Halo difuso exterior (Glow)
-          const haloGeo = new THREE.SphereGeometry(size * 0.75, 16, 16);
-          const haloMat = new THREE.MeshBasicMaterial({
-            color: baseColor,
-            transparent: true,
-            opacity: 0.22,
-            side: THREE.BackSide
-          });
-          group.add(new THREE.Mesh(haloGeo, haloMat));
+          // Halo Glow
+          const matHalo = new THREE.MeshBasicMaterial({ color: baseColor, transparent: true, opacity: 0.22, side: THREE.BackSide });
+          const meshHalo = new THREE.Mesh(geoHalo, matHalo);
+          meshHalo.scale.set(size * 0.75, size * 0.75, size * 0.75);
+          group.add(meshHalo);
 
-          // 3. Etiqueta de texto flotante en alta nitidez
+          // Etiqueta
           const sprite = new SpriteText(node.name);
-          sprite.color = hexColor;
+          sprite.color = node.color || '#00f5d4';
           sprite.textHeight = Math.max(2.8, size * 0.38);
           sprite.position.y = size * 0.7 + 3.5;
           sprite.fontFace = 'Helvetica, Arial, sans-serif';
           group.add(sprite);
 
-          group.__baseNode = node;
           return group;
         })
 
-        // 🌟 Aristas Neón y Partículas Sinápticas Blancas
-        .linkColor(() => '#236579')
-        .linkOpacity(0.7)
+        // --- ENLACES Y PARTÍCULAS DINÁMICAS ---
+        .linkColor(link => {
+          const hayFoco = highlightNodes.size > 0;
+          return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? '#0e242d' : '#236579');
+        })
+        .linkOpacity(link => {
+          const hayFoco = highlightNodes.size > 0;
+          return highlightLinks.has(link) ? 0.9 : (hayFoco ? 0.1 : 0.6);
+        })
         .linkWidth(1.2)
         .linkDirectionalParticles(2)
         .linkDirectionalParticleSpeed(0.005)
-        .linkDirectionalParticleWidth(1.6)
         .linkDirectionalParticleColor(() => '#ffffff')
+        .linkDirectionalParticleWidth(link => {
+          const hayFoco = highlightNodes.size > 0;
+          return highlightLinks.has(link) ? 2.5 : (hayFoco ? 0 : 1.6);
+        })
 
-        // Interacción por Clik
+        // --- INTERACCIONES ---
         .onNodeClick(node => {
-          nodoActual = node;
           document.getElementById('card-title').innerText = node.name;
           document.getElementById('card-id').innerText = node.id;
-          document.getElementById('card-desc').innerText = node.axioma || node.ordinario || 'Axioma estructural base';
+          document.getElementById('card-desc').innerText = node.axioma || node.ordinario || 'Axioma base';
           
           const btnDoc = document.getElementById('btn-doc');
           if (node.url && node.url.includes('http')) {
@@ -253,36 +291,33 @@
           } else {
             btnDoc.style.display = 'none';
           }
+          
           document.getElementById('info-card').style.display = 'block';
+          generarRadarECharts(node);
 
           highlightNodes.clear();
           highlightLinks.clear();
-          if (node) {
-            highlightNodes.add(node);
-            if (node.neighbors) node.neighbors.forEach(vecino => highlightNodes.add(vecino));
-            if (node.links) node.links.forEach(enlace => highlightLinks.add(enlace));
-          }
+          highlightNodes.add(node);
+          if (node.neighbors) node.neighbors.forEach(v => highlightNodes.add(v));
+          if (node.links) node.links.forEach(l => highlightLinks.add(l));
+          
           actualizarFiltroVisual(); 
-
           const distRatio = 1 + 50 / Math.hypot(node.x, node.y, node.z);
           Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 2000);
         })
         .onBackgroundClick(() => {
           document.getElementById('info-card').style.display = 'none';
-          nodoActual = null;
           highlightNodes.clear();
           highlightLinks.clear();
           actualizarFiltroVisual();
         });
 
-      // Físicas de distribución orgánica esférica
+      // --- FÍSICAS ---
       Graph.d3Force('charge').strength(-280);
-      Graph.d3Force('link').distance(link => {
-        if (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') return 130;
-        return 55;
-      });
+      Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 130 : 55);
     }
 
+    // 4. LÓGICA VISUAL Y DASHBOARD
     function actualizarFiltroVisual() {
       const hayFoco = highlightNodes.size > 0;
       Graph.graphData().nodes.forEach(node => {
@@ -294,34 +329,84 @@
           });
         }
       });
-      Graph
-        .linkColor(link => highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? '#0e242d' : '#236579'))
-        .linkOpacity(hayFoco ? 0.9 : 0.7);
+      // Fuerzo a Three.js a recalcular los estilos dinámicos
+      Graph.linkColor(Graph.linkColor())
+           .linkOpacity(Graph.linkOpacity())
+           .linkDirectionalParticleWidth(Graph.linkDirectionalParticleWidth());
     }
 
+    function generarRadarECharts(node) {
+      if (!myChart) {
+        myChart = echarts.init(document.getElementById('echarts-radar'));
+        window.addEventListener('resize', () => myChart.resize()); // Adaptabilidad
+      }
+
+      const conex = node.degree || 1;
+      const option = {
+        radar: {
+          indicator: [
+            { name: 'Red', max: 15 },
+            { name: 'Núcleo', max: 10 },
+            { name: 'Relevancia', max: 25 },
+            { name: 'Axiomas', max: 10 }
+          ],
+          splitArea: { show: false },
+          axisLine: { lineStyle: { color: 'rgba(56, 189, 248, 0.3)' } },
+          splitLine: { lineStyle: { color: 'rgba(56, 189, 248, 0.15)' } },
+          axisName: { color: '#94a3b8', fontSize: 10 }
+        },
+        series: [{
+          type: 'radar',
+          data: [{
+            value: [conex, Math.min(conex * 1.2, 10), node.val || 10, Math.min(conex, 8)],
+            name: node.id,
+            areaStyle: { color: 'rgba(0, 245, 212, 0.25)' },
+            lineStyle: { color: '#00f5d4', width: 1.5 },
+            itemStyle: { color: '#38bdf8' }
+          }]
+        }]
+      };
+      myChart.setOption(option);
+    }
+
+    // 5. BUSCADOR
     function volarHaciaNodo() {
       const texto = document.getElementById('buscador').value.toLowerCase().trim();
       if (!texto || !Graph) return;
       
-      const graphData = Graph.graphData();
-      const nodoEncontrado = graphData.nodes.find(n => (n.id && n.id.toLowerCase().includes(texto)) || (n.name && n.name.toLowerCase().includes(texto)));
+      const target = Graph.graphData().nodes.find(n => 
+        (n.id && n.id.toLowerCase().includes(texto)) || 
+        (n.name && n.name.toLowerCase().includes(texto))
+      );
       
-      if (nodoEncontrado) {
+      if (target) {
         highlightNodes.clear();
         highlightLinks.clear();
-        highlightNodes.add(nodoEncontrado);
-        if (nodoEncontrado.neighbors) nodoEncontrado.neighbors.forEach(vecino => highlightNodes.add(vecino));
-        if (nodoEncontrado.links) nodoEncontrado.links.forEach(enlace => highlightLinks.add(enlace));
-        actualizarFiltroVisual();
+        highlightNodes.add(target);
+        if (target.neighbors) target.neighbors.forEach(v => highlightNodes.add(v));
+        if (target.links) target.links.forEach(l => highlightLinks.add(l));
+        
+        document.getElementById('card-title').innerText = target.name;
+        document.getElementById('card-id').innerText = target.id;
+        document.getElementById('card-desc').innerText = target.axioma || target.ordinario || 'Axioma base';
+        const btnDoc = document.getElementById('btn-doc');
+        if (target.url && target.url.includes('http')) {
+          btnDoc.href = target.url; btnDoc.style.display = 'inline-block';
+        } else {
+          btnDoc.style.display = 'none';
+        }
+        document.getElementById('info-card').style.display = 'block';
+        generarRadarECharts(target);
 
-        const ratio = 1 + 50 / Math.hypot(nodoEncontrado.x, nodoEncontrado.y, nodoEncontrado.z);
-        Graph.cameraPosition({ x: nodoEncontrado.x * ratio, y: nodoEncontrado.y * ratio, z: nodoEncontrado.z * ratio }, nodoEncontrado, 2000);
+        actualizarFiltroVisual();
+        const ratio = 1 + 50 / Math.hypot(target.x, target.y, target.z);
+        Graph.cameraPosition({ x: target.x * ratio, y: target.y * ratio, z: target.z * ratio }, target, 2000);
       }
     }
     
-    document.getElementById('buscador').addEventListener('keypress', function (e) { 
+    document.getElementById('buscador').addEventListener('keypress', e => { 
       if (e.key === 'Enter') volarHaciaNodo(); 
     });
   </script>
 </body>
-</html> 
+</html>
