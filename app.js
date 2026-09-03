@@ -186,7 +186,7 @@ function renderizarGrafo(data) {
   Graph.d3Force('charge').strength(-180); 
   Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 80 : 35);
 
-  // MICRO-ESTRELLAS
+// MICRO-ESTRELLAS ILUMINADAS
   const starsGeo = new THREE.BufferGeometry();
   const starsCount = 2000;
   const posArray = new Float32Array(starsCount * 3);
@@ -195,16 +195,20 @@ function renderizarGrafo(data) {
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
-    size: 1.0, color: 0x66ccff, transparent: true, opacity: 0.25, sizeAttenuation: true
+    size: 2.2,             // Aumentamos el tamaño sutilmente
+    color: 0x88ffff,       // Cian brillante casi blanco
+    transparent: true, 
+    opacity: 0.9,          // Subimos la opacidad para que el Bloom las haga brillar
+    sizeAttenuation: true
   });
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
 
-  // EFECTO NEÓN NATIVO (UnrealBloomPass de Three.js)
+  // EFECTO NEÓN NATIVO (Raúl ya apagó el reflector)
   const bloomPass = new THREE.UnrealBloomPass();
-  bloomPass.strength = 1.6;  // Intensidad del neón
-  bloomPass.radius = 0.6;    // Dispersión de la luz
-  bloomPass.threshold = 0;   // Permite que todos los colores puros brillen
+  bloomPass.strength = 0.45;  // Intensidad drásticamente reducida (antes 1.6)
+  bloomPass.radius = 0.3;     // Dispersión más contenida (antes 0.6)
+  bloomPass.threshold = 0;    // Permite que las estrellas también brillen
   Graph.postProcessingComposer().addPass(bloomPass);
 
   // CÁMARA (Órbita majestuosa con Damping)
