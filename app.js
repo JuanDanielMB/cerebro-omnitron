@@ -1,12 +1,10 @@
 // ==============================================================================
-// CEREBRO DIGITAL - MOTOR TOPOLÓGICO & WEBGL (VERSIÓN CINEMÁTICA REAL)
+// CEREBRO DIGITAL - MOTOR CRISTALINO & RUTA AL NÚCLEO
 // ==============================================================================
 
-//  RECUERDA PONER TU URL DE APPS SCRIPT AQUÍ
-const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
+const API_URL = 'https://script.google.com/macros/s/TU_ID_DE_DESPLIEGUE_AQUI/exec';
 
 let Graph;
-let myChart = null; 
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
@@ -62,8 +60,48 @@ function prepararTopologia(data) {
   });
 }
 
+// ALGORITMO: Trazar cordón umbilical hacia el núcleo
+function trazarRutaAlNucleo(startNode) {
+  const queue = [[startNode]];
+  const visited = new Set([startNode.id]);
+  let shortestPath = null;
+  const nodesArray = Graph.graphData().nodes;
+  const linksArray = Graph.graphData().links;
+
+  while (queue.length > 0) {
+    const path = queue.shift();
+    const current = path[path.length - 1];
+
+    if (current.id === 'Omni-Eco' || (current.name && current.name.includes('Omnitron'))) {
+      shortestPath = path;
+      break;
+    }
+
+    if (current.neighbors) {
+      for (let neighbor of current.neighbors) {
+        if (!visited.has(neighbor.id)) {
+          visited.add(neighbor.id);
+          queue.push([...path, neighbor]);
+        }
+      }
+    }
+  }
+
+  if (shortestPath) {
+    shortestPath.forEach(n => highlightNodes.add(n));
+    for (let i = 0; i < shortestPath.length - 1; i++) {
+      const a = shortestPath[i];
+      const b = shortestPath[i + 1];
+      const link = linksArray.find(l => 
+        (l.source.id === a.id && l.target.id === b.id) || 
+        (l.source.id === b.id && l.target.id === a.id)
+      );
+      if (link) highlightLinks.add(link);
+    }
+  }
+}
+
 function renderizarGrafo(data) {
-  // Geometría unificada y limpia para los nodos
   const geoSphere = new THREE.SphereGeometry(1, 32, 32);
 
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
@@ -71,46 +109,48 @@ function renderizarGrafo(data) {
     .backgroundColor('#02040a') 
     .showNavInfo(false)
 
-    // 1. FÍSICAS LIBRES: El sistema nunca se congela, los nodos flotan
-    .cooldownTicks(Infinity)
-    .d3AlphaDecay(0.005) 
-    .d3VelocityDecay(0.15) 
+    // 1. FÍSICAS DE REPOSO: Los nodos se posicionan y luego se quedan COMPLETAMENTE ESTÁTICOS
+    .cooldownTicks(250) 
+    .d3AlphaDecay(0.015) 
+    .d3VelocityDecay(0.2) 
 
-    // 2. ARISTAS RECTAS: Eliminada la curvatura, ahora son conexiones láser
+    // 2. ARISTAS LÁSER RECTAS
     .linkColor(link => {
       const hayFoco = highlightNodes.size > 0;
-      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.15)' : 'rgba(56, 189, 248, 0.3)');
+      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.1)' : 'rgba(56, 189, 248, 0.25)');
     })
     .linkOpacity(0.9)
-    .linkWidth(link => highlightLinks.has(link) ? 1.8 : 0.8)
+    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.6)
     .linkDirectionalParticles(link => highlightLinks.has(link) ? 3 : 1)
-    .linkDirectionalParticleSpeed(0.006)
+    .linkDirectionalParticleSpeed(0.005)
     .linkDirectionalParticleWidth(link => highlightLinks.has(link) ? 2.5 : 1.2)
     .linkDirectionalParticleColor(() => '#ffffff')
 
-    // 3. NODOS ESTÉTICOS: Una sola esfera sólida y brillante, sin esferas dobles superpuestas
+    // 3. NODOS: CRISTALES TRASLÚCIDOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const baseColor = new THREE.Color(node.color);
       const size = node.val;
       const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
 
-      // Material de alta calidad (MeshStandard) que reacciona a la luz
-      const material = new THREE.MeshStandardMaterial({
+      // Material físico simulando vidrio cristalino
+      const material = new THREE.MeshPhysicalMaterial({
         color: baseColor,
         emissive: baseColor,
-        emissiveIntensity: 0.6,
-        roughness: 0.2,
-        metalness: 0.8,
+        emissiveIntensity: 0.4,
+        roughness: 0.1,
+        metalness: 0.2,
+        transmission: 0.6, 
         transparent: true,
-        opacity: 0.95
+        opacity: 0.7, // 70% sólido por defecto
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.1
       });
       
       const mesh = new THREE.Mesh(geoSphere, material);
       mesh.scale.set(size * 0.55, size * 0.55, size * 0.55); 
       group.add(mesh);
 
-      // Etiqueta flotante
       const sprite = new SpriteText(node.name || node.id);
       sprite.color = esRaiz ? '#ffffff' : node.color;
       sprite.textHeight = esRaiz ? 4.0 : Math.max(2.5, size * 0.35);
@@ -123,8 +163,11 @@ function renderizarGrafo(data) {
 
       return group;
     })
+    
+    // 4. INTERACCIONES Y DETENCIÓN DE ROTACIÓN
     .onNodeClick(node => {
-      Graph.controls().autoRotate = false; // Pausa el giro para leer
+      isOrbiting = false; // Detiene universo y cámara
+      Graph.controls().autoRotate = false; 
       
       document.getElementById('card-title').innerText = node.name;
       document.getElementById('card-id').innerText = node.id;
@@ -136,14 +179,17 @@ function renderizarGrafo(data) {
       } else {
         btnDoc.style.display = 'none';
       }
-      
       document.getElementById('info-card').style.display = 'block';
-      generarRadarECharts(node);
 
       highlightNodes.clear(); highlightLinks.clear();
+      
+      // Agrega vecinos inmediatos
       highlightNodes.add(node);
       if (node.neighbors) node.neighbors.forEach(v => highlightNodes.add(v));
       if (node.links) node.links.forEach(l => highlightLinks.add(l));
+      
+      // Trazar línea de vida hasta Omni-Eco
+      trazarRutaAlNucleo(node);
       
       actualizarFiltroVisual(); 
       const distRatio = 1 + 50 / Math.hypot(node.x, node.y, node.z);
@@ -153,64 +199,54 @@ function renderizarGrafo(data) {
       document.getElementById('info-card').style.display = 'none';
       highlightNodes.clear(); highlightLinks.clear();
       actualizarFiltroVisual();
-      Graph.controls().autoRotate = true; // Reactiva el giro
+      
+      isOrbiting = true; // Reactiva el universo
+      Graph.controls().autoRotate = true; 
     });
 
-  // Repulsión y distancia (nodos más libres)
   Graph.d3Force('charge').strength(-400);
   Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 160 : 80);
 
-  // 4. FONDO ESPACIAL: 5000 partículas estelares 3D
+  // FONDO ESPACIAL (MÁS PROFUNDO)
   const starsGeo = new THREE.BufferGeometry();
   const starsCount = 5000;
   const posArray = new Float32Array(starsCount * 3);
   for(let i = 0; i < starsCount * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 4000; // Distribución amplia
+    posArray[i] = (Math.random() - 0.5) * 4000;
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
-    size: 1.5,
-    color: 0x88ccff,
-    transparent: true,
-    opacity: 0.7,
-    sizeAttenuation: true
+    size: 1.5, color: 0x88ccff, transparent: true, opacity: 0.6, sizeAttenuation: true
   });
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
   
-  // Iluminación para que el material Standard luzca volumétrico
-  Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.4));
+  // Iluminación para los cristales
+  Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.5));
+  const light = new THREE.DirectionalLight(0xffffff, 0.6);
+  light.position.set(100, 200, 100);
+  Graph.scene().add(light);
 
-  // 5. CÁMARA ORBITAL AUTOMÁTICA
+  // 5. CÁMARA LENTA Y CON INERCIA (Damping)
   const controls = Graph.controls();
   controls.autoRotate = true;
-  controls.autoRotateSpeed = 1.5; // Velocidad de giro notable
+  controls.autoRotateSpeed = 0.35; // Giro mucho más lento y sereno
+  controls.enableDamping = true;   // Activa el deslizamiento
+  controls.dampingFactor = 0.05;   // Sensibilidad del deslizamiento al soltar el ratón
   
-  // Si el usuario arrastra el ratón, pausar órbita; reanudar al soltar
   controls.addEventListener('start', () => { controls.autoRotate = false; });
-  controls.addEventListener('end', () => { setTimeout(() => { controls.autoRotate = true; }, 3000); });
+  controls.addEventListener('end', () => { 
+    if (isOrbiting) setTimeout(() => { controls.autoRotate = true; }, 2000); 
+  });
 
-  // Animación de deriva celular en los nodos y rotación de estrellas
-  let t = 0;
-  (function animarFrame() {
-    t += 0.015;
-    
-    // Las estrellas giran muy lentamente
-    if (starMesh) {
-      starMesh.rotation.y += 0.0003;
-      starMesh.rotation.x += 0.0001;
+  // Animación del fondo (se detiene al hacer clic)
+  let isOrbiting = true;
+  (function animarEstrellas() {
+    if (isOrbiting && starMesh) {
+      starMesh.rotation.y += 0.0001; // Rotación de estrellas ultralenta
+      starMesh.rotation.x += 0.00005;
     }
-
-    // Los nodos ondulan libremente en su lugar
-    data.nodes.forEach((node, idx) => {
-      if (node.id !== 'Omni-Eco') {
-        node.vx += Math.sin(t + idx) * 0.06;
-        node.vy += Math.cos(t + idx) * 0.06;
-        node.vz += Math.sin(t + idx) * 0.06;
-      }
-    });
-
-    requestAnimationFrame(animarFrame);
+    requestAnimationFrame(animarEstrellas);
   })();
 }
 
@@ -219,46 +255,19 @@ function actualizarFiltroVisual() {
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
-      const opacityVal = hayFoco ? (enfocado ? 1.0 : 0.08) : 0.95;
+      // Estado normal = 70% (0.7). 
+      // Enfocado = 30% (0.3). No enfocado (fondo) = 5% (0.05).
+      const opacityVal = hayFoco ? (enfocado ? 0.3 : 0.05) : 0.7;
       node.__threeObj.children.forEach(child => {
-        if (child.material) child.material.opacity = opacityVal;
+        if (child.material) {
+          child.material.opacity = opacityVal;
+        }
       });
     }
   });
   Graph.linkColor(Graph.linkColor())
        .linkWidth(Graph.linkWidth())
        .linkDirectionalParticles(Graph.linkDirectionalParticles());
-}
-
-function generarRadarECharts(node) {
-  if (!myChart) {
-    myChart = echarts.init(document.getElementById('echarts-radar'));
-    window.addEventListener('resize', () => myChart.resize());
-  }
-  const conex = node.degree || 1;
-  const option = {
-    radar: {
-      indicator: [
-        { name: 'Red', max: 15 }, { name: 'Central', max: 10 },
-        { name: 'Relevancia', max: 25 }, { name: 'Axiomas', max: 10 }
-      ],
-      splitArea: { show: false },
-      axisLine: { lineStyle: { color: 'rgba(56, 189, 248, 0.25)' } },
-      splitLine: { lineStyle: { color: 'rgba(56, 189, 248, 0.12)' } },
-      axisName: { color: '#94a3b8', fontSize: 9, fontFamily: 'Rajdhani' }
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: [conex, Math.min(conex * 1.3, 10), node.val || 10, Math.min(conex, 7)],
-        name: node.id,
-        areaStyle: { color: 'rgba(0, 245, 212, 0.2)' },
-        lineStyle: { color: '#00f5d4', width: 1.5 },
-        itemStyle: { color: '#38bdf8' }
-      }]
-    }]
-  };
-  myChart.setOption(option);
 }
 
 function volarHaciaNodo() {
@@ -268,11 +277,15 @@ function volarHaciaNodo() {
     (n.id && n.id.toLowerCase().includes(texto)) || (n.name && n.name.toLowerCase().includes(texto))
   );
   if (target) {
+    isOrbiting = false; 
     Graph.controls().autoRotate = false; 
     highlightNodes.clear(); highlightLinks.clear();
+    
     highlightNodes.add(target);
     if (target.neighbors) target.neighbors.forEach(v => highlightNodes.add(v));
     if (target.links) target.links.forEach(l => highlightLinks.add(l));
+    
+    trazarRutaAlNucleo(target);
     
     document.getElementById('card-title').innerText = target.name;
     document.getElementById('card-id').innerText = target.id;
@@ -285,7 +298,6 @@ function volarHaciaNodo() {
       btnDoc.style.display = 'none';
     }
     document.getElementById('info-card').style.display = 'block';
-    generarRadarECharts(target);
     actualizarFiltroVisual();
     
     const ratio = 1 + 50 / Math.hypot(target.x, target.y, target.z);
