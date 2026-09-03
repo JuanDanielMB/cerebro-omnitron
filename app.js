@@ -1,5 +1,5 @@
 // ==============================================================================
-// CEREBRO DIGITAL - COLORES MATRICIALES Y RUTA LÁSER AZUL
+// CEREBRO DIGITAL - CRISTALES SÓLIDOS, LÁSER Y MODO CONCENTRACIÓN
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
@@ -43,8 +43,7 @@ function prepararTopologia(data) {
 
   data.nodes.forEach(n => {
     n.degree = counts[n.id] || 1;
-    // AQUÍ ESTÁ LA CLAVE: Respetamos el color que envía la matriz de Google Sheets
-    n.color = n.color || '#ffffff'; 
+    n.color = n.color || '#ffffff'; // Respeta el color matricial
     n.val = (n.id === 'Omni-Eco' || n.name?.includes('Omnitron')) ? 14 : scaleRadius(n.degree);
   });
 }
@@ -97,16 +96,26 @@ function renderizarGrafo(data) {
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS LÁSER AZUL NEÓN (Invisibles hasta enfocar)
-    .linkColor(() => '#00d2ff') // Azul neón puro
-    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.0) // 0.0 en reposo
-    .linkWidth(link => highlightLinks.has(link) ? 2.5 : 0.0)
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 0) 
+    // ARISTAS LÁSER (Delgadas y con apagado estricto)
+    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : '#00d2ff') 
+    .linkVisibility(link => {
+      if (highlightNodes.size === 0) return true;
+      return highlightLinks.has(link);
+    })
+    .linkOpacity(link => {
+      if (highlightNodes.size === 0) return 0.25; 
+      return highlightLinks.has(link) ? 0.8 : 0.0; 
+    })
+    .linkWidth(link => {
+      if (highlightNodes.size === 0) return 0.3; 
+      return highlightLinks.has(link) ? 0.8 : 0.0; 
+    })
+    .linkDirectionalParticles(link => highlightLinks.has(link) ? 3 : 0) 
     .linkDirectionalParticleSpeed(0.008)
-    .linkDirectionalParticleWidth(3.0)
-    .linkDirectionalParticleColor(() => '#00ffff') // Partículas viajeras celestes
+    .linkDirectionalParticleWidth(2.0)
+    .linkDirectionalParticleColor(() => '#ffffff') 
 
-    // NODOS HOLOGRÁFICOS
+    // NODOS HOLOGRÁFICOS (Más Sólidos)
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
@@ -115,9 +124,9 @@ function renderizarGrafo(data) {
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
-        opacity: 0.35, // Traslúcidos en reposo
+        opacity: 0.55, // Nodos con mayor solidez (antes 0.35)
         depthWrite: false, 
-        blending: THREE.AdditiveBlending // Luz pura
+        blending: THREE.AdditiveBlending 
       });
       const mesh = new THREE.Mesh(geometry, material);
       group.add(mesh);
@@ -169,7 +178,7 @@ function renderizarGrafo(data) {
   Graph.d3Force('charge').strength(-180); 
   Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 80 : 35);
 
-  // ESTRELLAS DE FONDO
+  // MICRO-ESTRELLAS ILUMINADAS
   const starsGeo = new THREE.BufferGeometry();
   const starsCount = 2000;
   const posArray = new Float32Array(starsCount * 3);
@@ -219,7 +228,9 @@ function actualizarFiltroVisual() {
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
-      const opacidadCristal = hayFoco ? (enfocado ? 0.6 : 0.02) : 0.35;
+      
+      // Ajuste de solidez: 0.55 en reposo, 0.85 enfocado, casi apagado si no está en la ruta
+      const opacidadCristal = hayFoco ? (enfocado ? 0.85 : 0.05) : 0.55;
       const opacidadTexto = hayFoco ? (enfocado ? 1.0 : 0.0) : 1.0;
 
       const group = node.__threeObj.children;
@@ -228,9 +239,11 @@ function actualizarFiltroVisual() {
     }
   });
   
+  // Fuerza la actualización de visibilidad de las líneas
   Graph.linkColor(Graph.linkColor())
        .linkOpacity(Graph.linkOpacity())
        .linkWidth(Graph.linkWidth())
+       .linkVisibility(Graph.linkVisibility())
        .linkDirectionalParticles(Graph.linkDirectionalParticles());
 }
 
