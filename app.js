@@ -110,13 +110,14 @@ function renderizarGrafo(data) {
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS RECTAS Y ESTÉTICAS (Sin Curvatura Forzada)
+    // 2. ARISTAS RECTAS Y ESTÉTICAS (Azul Neón)
     .linkColor(link => {
       const hayFoco = highlightNodes.size > 0;
-      return highlightLinks.has(link) ? '#ffffff' : (hayFoco ? 'rgba(0, 255, 255, 0.05)' : link.source.color);
+      // Si está enfocado brilla blanco, si no hay foco es azul neón, si está apagado casi ni se ve
+      return highlightLinks.has(link) ? '#ffffff' : (hayFoco ? 'rgba(0, 210, 255, 0.05)' : '#00d2ff');
     })
-    .linkOpacity(0.5) 
-    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.8)
+    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.35) 
+    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.6)
     .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 0) 
     .linkDirectionalParticleSpeed(0.008)
     .linkDirectionalParticleWidth(2.5)
@@ -204,11 +205,11 @@ function renderizarGrafo(data) {
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
 
-  // EFECTO NEÓN NATIVO (Raúl ya apagó el reflector)
+ // EFECTO NEÓN NATIVO (UnrealBloomPass Ajustado)
   const bloomPass = new THREE.UnrealBloomPass();
-  bloomPass.strength = 0.45;  // Intensidad drásticamente reducida (antes 1.6)
-  bloomPass.radius = 0.3;     // Dispersión más contenida (antes 0.6)
-  bloomPass.threshold = 0;    // Permite que las estrellas también brillen
+  bloomPass.strength = 0.25;  // Brillo mucho más suave y controlado
+  bloomPass.radius = 0.15;    // El resplandor se queda pegado al nodo, no mancha la pantalla
+  bloomPass.threshold = 0.2;  // CLAVE: Solo brillan los colores puros, eliminando la "niebla"
   Graph.postProcessingComposer().addPass(bloomPass);
 
   // CÁMARA (Órbita majestuosa con Damping)
