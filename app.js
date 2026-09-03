@@ -1,5 +1,5 @@
 // ==============================================================================
-// CEREBRO DIGITAL - GEOMETRÍA NATIVA VASTURIANO & NEÓN PURO
+// CEREBRO DIGITAL - COLORES MATRICIALES Y RUTA LÁSER AZUL
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
@@ -7,19 +7,6 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHoj
 let Graph;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
-
-// Colores puros y saturados para que el Bloom los detecte como luz real
-const PALETA_NEON = ['#00f5d4', '#00ffff', '#b100ff', '#ff0055', '#ffea00', '#00ff66'];
-
-function armonizarColor(colorOriginal, id) {
-  if (!colorOriginal || colorOriginal === '#ff0000' || colorOriginal === '#00ff00' || colorOriginal === '#0000ff') {
-    let hash = 0;
-    const str = String(id || 'default');
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    return PALETA_NEON[Math.abs(hash) % PALETA_NEON.length];
-  }
-  return colorOriginal;
-}
 
 fetch(API_URL)
   .then(res => res.json())
@@ -56,7 +43,8 @@ function prepararTopologia(data) {
 
   data.nodes.forEach(n => {
     n.degree = counts[n.id] || 1;
-    n.color = armonizarColor(n.color, n.id);
+    // AQUÍ ESTÁ LA CLAVE: Respetamos el color que envía la matriz de Google Sheets
+    n.color = n.color || '#ffffff'; 
     n.val = (n.id === 'Omni-Eco' || n.name?.includes('Omnitron')) ? 14 : scaleRadius(n.degree);
   });
 }
@@ -102,45 +90,40 @@ function trazarRutaAlNucleo(startNode) {
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#040509') // Fondo espacial oscuro y profundo
+    .backgroundColor('#040509') 
     .showNavInfo(false)
 
-    // FÍSICAS DE ESTABILIZACIÓN NATIVA
     .cooldownTicks(200)
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // 2. ARISTAS RECTAS Y ESTÉTICAS (Azul Neón)
-    .linkColor(link => {
-      const hayFoco = highlightNodes.size > 0;
-      // Si está enfocado brilla blanco, si no hay foco es azul neón, si está apagado casi ni se ve
-      return highlightLinks.has(link) ? '#ffffff' : (hayFoco ? 'rgba(0, 210, 255, 0.05)' : '#00d2ff');
-    })
-    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.35) 
-    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.6)
+    // ARISTAS LÁSER AZUL NEÓN (Invisibles hasta enfocar)
+    .linkColor(() => '#00d2ff') // Azul neón puro
+    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.0) // 0.0 en reposo
+    .linkWidth(link => highlightLinks.has(link) ? 2.5 : 0.0)
     .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 0) 
     .linkDirectionalParticleSpeed(0.008)
-    .linkDirectionalParticleWidth(2.5)
-    .linkDirectionalParticleColor(() => '#ffffff')
+    .linkDirectionalParticleWidth(3.0)
+    .linkDirectionalParticleColor(() => '#00ffff') // Partículas viajeras celestes
 
-    // GEOMETRÍA NATIVA VASTURIANO: Esferas simples para maximizar el neón
+    // NODOS HOLOGRÁFICOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
 
-      // MeshBasicMaterial ignora sombras y luces, emitiendo color puro para el Bloom
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
-        opacity: 0.95
+        opacity: 0.35, // Traslúcidos en reposo
+        depthWrite: false, 
+        blending: THREE.AdditiveBlending // Luz pura
       });
       const mesh = new THREE.Mesh(geometry, material);
       group.add(mesh);
 
-      // Tipografía limpia y brillante
       const sprite = new SpriteText(node.name || node.id);
-      sprite.color = '#ffffff'; 
+      sprite.color = 'rgba(255, 255, 255, 0.9)'; 
       sprite.textHeight = esRaiz ? 3.5 : Math.max(1.8, node.val * 0.35);
       sprite.position.y = (node.val * 0.8) + 2.5;
       sprite.fontFace = "'Rajdhani', sans-serif";
@@ -150,7 +133,6 @@ function renderizarGrafo(data) {
       return group;
     })
 
-    // EVENTOS (Congelamiento de cámara al enfocar)
     .onNodeClick(node => {
       Graph.controls().autoRotate = false; 
       
@@ -187,7 +169,7 @@ function renderizarGrafo(data) {
   Graph.d3Force('charge').strength(-180); 
   Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 80 : 35);
 
-// MICRO-ESTRELLAS ILUMINADAS
+  // ESTRELLAS DE FONDO
   const starsGeo = new THREE.BufferGeometry();
   const starsCount = 2000;
   const posArray = new Float32Array(starsCount * 3);
@@ -196,23 +178,23 @@ function renderizarGrafo(data) {
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
-    size: 2.2,             // Aumentamos el tamaño sutilmente
-    color: 0x88ffff,       // Cian brillante casi blanco
+    size: 2.2,             
+    color: 0x88ffff,       
     transparent: true, 
-    opacity: 0.9,          // Subimos la opacidad para que el Bloom las haga brillar
+    opacity: 0.9,          
     sizeAttenuation: true
   });
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
 
- // EFECTO NEÓN NATIVO (UnrealBloomPass Ajustado)
+  // FILTRO BLOOM (Luz dinámica controlada)
   const bloomPass = new THREE.UnrealBloomPass();
-  bloomPass.strength = 0.25;  // Brillo mucho más suave y controlado
-  bloomPass.radius = 0.15;    // El resplandor se queda pegado al nodo, no mancha la pantalla
-  bloomPass.threshold = 0.2;  // CLAVE: Solo brillan los colores puros, eliminando la "niebla"
+  bloomPass.strength = 0.45;  
+  bloomPass.radius = 0.15;    
+  bloomPass.threshold = 0.2;  
   Graph.postProcessingComposer().addPass(bloomPass);
 
-  // CÁMARA (Órbita majestuosa con Damping)
+  // CÁMARA
   const controls = Graph.controls();
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.3; 
@@ -224,7 +206,6 @@ function renderizarGrafo(data) {
     if (highlightNodes.size === 0) setTimeout(() => { controls.autoRotate = true; }, 2000); 
   });
 
-  // Rotación ultra lenta del universo de fondo
   (function animarEstrellas() {
     if (starMesh && Graph.controls().autoRotate) {
       starMesh.rotation.y += 0.00015;
@@ -238,8 +219,8 @@ function actualizarFiltroVisual() {
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
-      const opacidadCristal = hayFoco ? (enfocado ? 1.0 : 0.05) : 1.0;
-      const opacidadTexto = hayFoco ? (enfocado ? 1.0 : 0.03) : 1.0;
+      const opacidadCristal = hayFoco ? (enfocado ? 0.6 : 0.02) : 0.35;
+      const opacidadTexto = hayFoco ? (enfocado ? 1.0 : 0.0) : 1.0;
 
       const group = node.__threeObj.children;
       if (group[0] && group[0].material) group[0].material.opacity = opacidadCristal;
