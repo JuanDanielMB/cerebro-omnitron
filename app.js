@@ -1,7 +1,8 @@
 // ==============================================================================
-// CEREBRO DIGITAL - MOTOR TOPOLÓGICO & WEBGL (VERSIÓN CINEMÁTICA)
+// CEREBRO DIGITAL - MOTOR TOPOLÓGICO & WEBGL (VERSIÓN CINEMÁTICA REAL)
 // ==============================================================================
 
+//  RECUERDA PONER TU URL DE APPS SCRIPT AQUÍ
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
 
 let Graph;
@@ -9,9 +10,7 @@ let myChart = null;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
-const PALETA_NEON = [
-  '#00f5d4', '#38bdf8', '#a855f7', '#f59e0b', '#ec4899', '#10b981'
-];
+const PALETA_NEON = ['#00f5d4', '#38bdf8', '#a855f7', '#f59e0b', '#ec4899', '#10b981'];
 
 function armonizarColor(colorOriginal, id) {
   if (!colorOriginal || colorOriginal === '#ff0000' || colorOriginal === '#00ff00' || colorOriginal === '#0000ff') {
@@ -23,7 +22,6 @@ function armonizarColor(colorOriginal, id) {
   return colorOriginal;
 }
 
-// 1. Fetch de Datos
 fetch(API_URL)
   .then(res => res.json())
   .then(data => {
@@ -35,7 +33,6 @@ fetch(API_URL)
     document.getElementById('loading').innerText = 'ERROR DE CONEXIÓN: ' + err.message;
   });
 
-// 2. Preprocesamiento
 function prepararTopologia(data) {
   const counts = {};
   data.links.forEach(link => {
@@ -65,58 +62,59 @@ function prepararTopologia(data) {
   });
 }
 
-// 3. Renderizado 3D
 function renderizarGrafo(data) {
-  const geoSphere = new THREE.SphereGeometry(1, 32, 32); // Mayor poligonaje para suavidad
+  // Geometría unificada y limpia para los nodos
+  const geoSphere = new THREE.SphereGeometry(1, 32, 32);
 
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#02040a') // Fondo aún más profundo para contrastar las estrellas
+    .backgroundColor('#02040a') 
     .showNavInfo(false)
 
-    // --- FÍSICAS MÁS LIBRES Y FLUIDAS ---
+    // 1. FÍSICAS LIBRES: El sistema nunca se congela, los nodos flotan
     .cooldownTicks(Infinity)
-    .d3AlphaDecay(0.005) // Evita que se congelen
-    .d3VelocityDecay(0.12) // Deslizamiento mucho más suave (menos fricción)
+    .d3AlphaDecay(0.005) 
+    .d3VelocityDecay(0.15) 
 
-    // --- ARISTAS RECTAS (Láseres) ---
+    // 2. ARISTAS RECTAS: Eliminada la curvatura, ahora son conexiones láser
     .linkColor(link => {
       const hayFoco = highlightNodes.size > 0;
-      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.1)' : 'rgba(56, 189, 248, 0.25)');
+      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.15)' : 'rgba(56, 189, 248, 0.3)');
     })
-    .linkOpacity(0.8)
-    .linkWidth(link => highlightLinks.has(link) ? 1.5 : 0.5) // Aristas finas y elegantes
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 1)
-    .linkDirectionalParticleSpeed(0.005)
+    .linkOpacity(0.9)
+    .linkWidth(link => highlightLinks.has(link) ? 1.8 : 0.8)
+    .linkDirectionalParticles(link => highlightLinks.has(link) ? 3 : 1)
+    .linkDirectionalParticleSpeed(0.006)
     .linkDirectionalParticleWidth(link => highlightLinks.has(link) ? 2.5 : 1.2)
     .linkDirectionalParticleColor(() => '#ffffff')
 
-    // --- NODOS: UN SOLO NÚCLEO EMISIVO ---
+    // 3. NODOS ESTÉTICOS: Una sola esfera sólida y brillante, sin esferas dobles superpuestas
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const baseColor = new THREE.Color(node.color);
       const size = node.val;
       const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
 
-      // Un solo material de alta calidad
-      const matSphere = new THREE.MeshStandardMaterial({
+      // Material de alta calidad (MeshStandard) que reacciona a la luz
+      const material = new THREE.MeshStandardMaterial({
         color: baseColor,
         emissive: baseColor,
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 0.6,
         roughness: 0.2,
-        metalness: 0.5,
+        metalness: 0.8,
         transparent: true,
         opacity: 0.95
       });
-      const meshSphere = new THREE.Mesh(geoSphere, matSphere);
-      meshSphere.scale.set(size * 0.5, size * 0.5, size * 0.5); // Escala unificada
-      group.add(meshSphere);
+      
+      const mesh = new THREE.Mesh(geoSphere, material);
+      mesh.scale.set(size * 0.55, size * 0.55, size * 0.55); 
+      group.add(mesh);
 
-      // Texto limpio
+      // Etiqueta flotante
       const sprite = new SpriteText(node.name || node.id);
       sprite.color = esRaiz ? '#ffffff' : node.color;
-      sprite.textHeight = esRaiz ? 3.8 : Math.max(2.2, size * 0.3);
-      sprite.position.y = size * 0.6 + 3.0;
+      sprite.textHeight = esRaiz ? 4.0 : Math.max(2.5, size * 0.35);
+      sprite.position.y = size * 0.65 + 3.0;
       sprite.fontFace = "'Rajdhani', sans-serif";
       sprite.fontWeight = '700';
       sprite.strokeColor = '#02040a';
@@ -125,10 +123,8 @@ function renderizarGrafo(data) {
 
       return group;
     })
-
-    // --- INTERACCIONES Y ENFOQUE ---
     .onNodeClick(node => {
-      isOrbiting = false; // Detiene la órbita automática para dejarte observar
+      Graph.controls().autoRotate = false; // Pausa el giro para leer
       
       document.getElementById('card-title').innerText = node.name;
       document.getElementById('card-id').innerText = node.id;
@@ -157,70 +153,67 @@ function renderizarGrafo(data) {
       document.getElementById('info-card').style.display = 'none';
       highlightNodes.clear(); highlightLinks.clear();
       actualizarFiltroVisual();
-      isOrbiting = true; // Reactiva la órbita panorámica
+      Graph.controls().autoRotate = true; // Reactiva el giro
     });
 
-  // Repulsión fuerte para evitar amontonamientos
+  // Repulsión y distancia (nodos más libres)
   Graph.d3Force('charge').strength(-400);
-  Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 180 : 90);
+  Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 160 : 80);
 
-  // --- CREACIÓN DEL FONDO ESTELAR (Micropartículas 3D) ---
+  // 4. FONDO ESPACIAL: 5000 partículas estelares 3D
   const starsGeo = new THREE.BufferGeometry();
-  const starsCount = 4000;
+  const starsCount = 5000;
   const posArray = new Float32Array(starsCount * 3);
   for(let i = 0; i < starsCount * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 3500; // Distribución en un volumen inmenso
+    posArray[i] = (Math.random() - 0.5) * 4000; // Distribución amplia
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
     size: 1.5,
-    color: 0x66aaff,
+    color: 0x88ccff,
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.7,
     sizeAttenuation: true
   });
   const starMesh = new THREE.Points(starsGeo, starsMat);
-  Graph.scene().add(starMesh); // Agregamos las estrellas al escenario
-
-  // --- BUCLE DE ANIMACIÓN CINEMÁTICA (Órbita + Deriva) ---
-  let isOrbiting = true;
-  let orbitAngle = 0;
-  let t = 0;
+  Graph.scene().add(starMesh);
   
-  // Pausar órbita si el usuario arrastra la pantalla manualmente
-  Graph.controls().addEventListener('start', () => { isOrbiting = false; });
+  // Iluminación para que el material Standard luzca volumétrico
+  Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.4));
 
+  // 5. CÁMARA ORBITAL AUTOMÁTICA
+  const controls = Graph.controls();
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 1.5; // Velocidad de giro notable
+  
+  // Si el usuario arrastra el ratón, pausar órbita; reanudar al soltar
+  controls.addEventListener('start', () => { controls.autoRotate = false; });
+  controls.addEventListener('end', () => { setTimeout(() => { controls.autoRotate = true; }, 3000); });
+
+  // Animación de deriva celular en los nodos y rotación de estrellas
+  let t = 0;
   (function animarFrame() {
-    t += 0.012;
+    t += 0.015;
     
-    // 1. Deriva suave (los nodos respiran en su sitio)
+    // Las estrellas giran muy lentamente
+    if (starMesh) {
+      starMesh.rotation.y += 0.0003;
+      starMesh.rotation.x += 0.0001;
+    }
+
+    // Los nodos ondulan libremente en su lugar
     data.nodes.forEach((node, idx) => {
       if (node.id !== 'Omni-Eco') {
-        node.vx += Math.sin(t + idx) * 0.07;
-        node.vy += Math.cos(t + idx * 0.8) * 0.07;
-        node.vz += Math.sin(t * 0.6 + idx) * 0.07;
+        node.vx += Math.sin(t + idx) * 0.06;
+        node.vy += Math.cos(t + idx) * 0.06;
+        node.vz += Math.sin(t + idx) * 0.06;
       }
     });
 
-    // 2. Órbita de cámara automática y efecto parallax de estrellas
-    if (isOrbiting) {
-      orbitAngle += 0.0015;
-      const distance = 550;
-      Graph.cameraPosition({
-        x: distance * Math.sin(orbitAngle),
-        z: distance * Math.cos(orbitAngle)
-      });
-      // Rotación sutil del universo de fondo
-      if (starMesh) {
-        starMesh.rotation.y += 0.0003;
-        starMesh.rotation.x += 0.0001;
-      }
-    }
     requestAnimationFrame(animarFrame);
   })();
 }
 
-// 4. Lógica de UI
 function actualizarFiltroVisual() {
   const hayFoco = highlightNodes.size > 0;
   Graph.graphData().nodes.forEach(node => {
@@ -275,8 +268,7 @@ function volarHaciaNodo() {
     (n.id && n.id.toLowerCase().includes(texto)) || (n.name && n.name.toLowerCase().includes(texto))
   );
   if (target) {
-    // Apagamos órbita y enfocamos
-    isOrbiting = false; 
+    Graph.controls().autoRotate = false; 
     highlightNodes.clear(); highlightLinks.clear();
     highlightNodes.add(target);
     if (target.neighbors) target.neighbors.forEach(v => highlightNodes.add(v));
