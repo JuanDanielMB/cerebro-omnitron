@@ -2,31 +2,239 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Cerebro Digital - Axiomatic Ontology Graph</title>
+  <title>Cerebro Digital - Ontología Axiomática</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- Fuentes -->
+  <!-- Fuentes Ciberpunk -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
   
-  <!-- Estilos Modulares -->
-  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      --bg-dark: #040509; /* Fondo abismal */
+      --cyan-neon: #00ffff;
+      --blue-neon: #38bdf8;
+      --glass-panel: rgba(4, 8, 15, 0.85); /* Cristal oscuro */
+      --border-glow: rgba(0, 255, 255, 0.3);
+    }
 
-  <!-- Librerías Externas -->
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: 'Rajdhani', sans-serif;
+      color: #e2e8f0;
+      user-select: none;
+    }
+    
+    #title-header {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #title-header h1 {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      color: #ffffff;
+      text-shadow: 0 0 15px var(--cyan-neon), 0 0 30px var(--cyan-neon);
+    }
+
+    #title-header span {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--blue-neon);
+      text-transform: uppercase;
+      opacity: 0.8;
+      font-weight: 600;
+    }
+    
+    #graph-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      color: var(--cyan-neon);
+      font-size: 16px;
+      letter-spacing: 3px;
+      z-index: 200;
+      pointer-events: none;
+      text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+      animation: pulse 1.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.3; }
+      to { opacity: 1; }
+    }
+
+    /* Buscador Ciberpunk */
+    .search-panel {
+      position: absolute;
+      top: 24px;
+      right: 28px;
+      z-index: 100;
+      background: var(--glass-panel);
+      border: 1px solid var(--border-glow);
+      border-radius: 6px; /* Bordes menos redondeados, más tecnológicos */
+      padding: 8px 12px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search-panel input {
+      padding: 8px 14px;
+      width: 220px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.6);
+      color: #ffffff;
+      outline: none;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .search-panel input:focus {
+      border-color: var(--cyan-neon);
+      box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+    }
+
+    .search-panel button {
+      padding: 8px 16px;
+      background: var(--cyan-neon);
+      border: none;
+      color: #000000;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      transition: 0.3s;
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    }
+
+    .search-panel button:hover {
+      background: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+    }
+
+    /* Tarjeta de Información (Sin Radar) */
+    #info-card {
+      position: absolute;
+      bottom: 28px;
+      right: 28px;
+      background: var(--glass-panel);
+      border: 1px solid var(--border-glow);
+      border-radius: 6px;
+      padding: 20px;
+      width: 320px;
+      display: none;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
+      z-index: 100;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    #info-card h4 {
+      margin: 0 0 10px 0;
+      font-family: 'Orbitron', sans-serif;
+      color: var(--cyan-neon);
+      font-size: 16px;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+    }
+
+    #info-card p {
+      margin: 6px 0;
+      font-size: 15px;
+      color: #cbd5e1;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    #info-card .highlight {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    #btn-doc {
+      display: inline-block;
+      margin-top: 16px;
+      color: #000000;
+      text-decoration: none;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      background: var(--cyan-neon);
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+      transition: all 0.25s;
+    }
+
+    #btn-doc:hover {
+      background: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+    }
+  </style>
+
+  <!-- ========================================== -->
+  <!-- LIBRERÍAS EXTERNAS Y POST-PROCESAMIENTO  -->
+  <!-- ========================================== -->
+  
+  <!-- 1. Motor 3D y Gráfos Base -->
   <script src="https://unpkg.com/three@0.136.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
   <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
-  <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+
+  <!-- 2. Shaders y Efecto de Luz Dinámica (UnrealBloomPass) -->
+  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 </head>
 <body>
+  <!-- Interfaz de Usuario -->
   <div id="title-header">
     <h1>Cerebro Digital</h1>
     <span>Ontología Axiomática</span>
   </div>
   
-  <div id="loading">SINCRONIZANDO RED NEURONAL...</div>
+  <div id="loading">Sincronizando red neuronal...</div>
 
   <div class="search-panel">
     <input type="text" id="buscador" placeholder="Localizar nodo o concepto...">
@@ -39,10 +247,11 @@
     <p><span class="highlight">Axioma:</span> <span id="card-desc"></span></p>
     <a id="btn-doc" href="#" target="_blank">FUENTE EN DRIVE ↗</a>
   </div>
-  
+
+  <!-- Contenedor del Renderizado WebGL -->
   <div id="graph-container"></div>
 
-  <!-- Lógica Modular -->
+  <!-- Carga del Motor Lógico (Asegúrate de que app.js esté actualizado) -->
   <script src="app.js"></script>
 </body>
 </html>
