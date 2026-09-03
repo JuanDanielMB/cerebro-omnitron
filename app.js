@@ -1,5 +1,5 @@
 // ==============================================================================
-// CEREBRO DIGITAL - MOTOR CRISTALINO & RUTA AL NÚCLEO
+// CEREBRO DIGITAL - NEÓN CIBERPUNK & RUTA AL NÚCLEO
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
@@ -8,7 +8,8 @@ let Graph;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
-const PALETA_NEON = ['#00f5d4', '#38bdf8', '#a855f7', '#f59e0b', '#ec4899', '#10b981'];
+// Paleta Neón Ciberpunk (Colores ultrapuros)
+const PALETA_NEON = ['#00f5d4', '#00ffff', '#b100ff', '#ff0055', '#ffea00', '#00ff66'];
 
 function armonizarColor(colorOriginal, id) {
   if (!colorOriginal || colorOriginal === '#ff0000' || colorOriginal === '#00ff00' || colorOriginal === '#0000ff') {
@@ -50,22 +51,22 @@ function prepararTopologia(data) {
     }
   });
 
+  // Nodos más pequeños en general para el efecto de red densa
   const maxConex = d3.max(Object.values(counts)) || 10;
-  const scaleRadius = d3.scaleLinear().domain([1, maxConex]).range([6, 18]);
+  const scaleRadius = d3.scaleLinear().domain([1, maxConex]).range([3, 10]); 
 
   data.nodes.forEach(n => {
     n.degree = counts[n.id] || 1;
     n.color = armonizarColor(n.color, n.id);
-    n.val = (n.id === 'Omni-Eco' || n.name?.includes('Omnitron')) ? 24 : scaleRadius(n.degree);
+    n.val = (n.id === 'Omni-Eco' || n.name?.includes('Omnitron')) ? 16 : scaleRadius(n.degree);
   });
 }
 
-// ALGORITMO: Trazar cordón umbilical hacia el núcleo
+// CORDÓN UMBILICAL (BFS): Ilumina desde el nodo clicado hasta el centro
 function trazarRutaAlNucleo(startNode) {
   const queue = [[startNode]];
   const visited = new Set([startNode.id]);
   let shortestPath = null;
-  const nodesArray = Graph.graphData().nodes;
   const linksArray = Graph.graphData().links;
 
   while (queue.length > 0) {
@@ -93,8 +94,7 @@ function trazarRutaAlNucleo(startNode) {
       const a = shortestPath[i];
       const b = shortestPath[i + 1];
       const link = linksArray.find(l => 
-        (l.source.id === a.id && l.target.id === b.id) || 
-        (l.source.id === b.id && l.target.id === a.id)
+        (l.source.id === a.id && l.target.id === b.id) || (l.source.id === b.id && l.target.id === a.id)
       );
       if (link) highlightLinks.add(link);
     }
@@ -106,68 +106,78 @@ function renderizarGrafo(data) {
 
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#02040a') 
+    .backgroundColor('#010205') // Fondo Ciberpunk abismal
     .showNavInfo(false)
 
-    // 1. FÍSICAS DE REPOSO: Los nodos se posicionan y luego se quedan COMPLETAMENTE ESTÁTICOS
-    .cooldownTicks(250) 
-    .d3AlphaDecay(0.015) 
-    .d3VelocityDecay(0.2) 
-
-    // 2. ARISTAS LÁSER RECTAS
+    // 1. FÍSICAS RÁPIDAS Y ESTÁTICAS: Se arma la red y se congela
+    .cooldownTicks(150) // Tiempo corto de acomodación
+    .d3VelocityDecay(0.4) // Fricción alta para que se queden quietos
+    
+    // 2. RED COMPACTA Y DENSA (Aristas cortas)
     .linkColor(link => {
       const hayFoco = highlightNodes.size > 0;
-      return highlightLinks.has(link) ? '#00f5d4' : (hayFoco ? 'rgba(15, 23, 42, 0.1)' : 'rgba(56, 189, 248, 0.25)');
+      return highlightLinks.has(link) ? '#ffffff' : (hayFoco ? 'rgba(0, 255, 255, 0.05)' : link.source.color);
     })
-    .linkOpacity(0.9)
-    .linkWidth(link => highlightLinks.has(link) ? 2.0 : 0.6)
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? 3 : 1)
-    .linkDirectionalParticleSpeed(0.005)
-    .linkDirectionalParticleWidth(link => highlightLinks.has(link) ? 2.5 : 1.2)
+    .linkOpacity(1)
+    .linkWidth(link => highlightLinks.has(link) ? 3.0 : 0.8) // Líneas láser
+    .linkDirectionalParticles(link => highlightLinks.has(link) ? 4 : 0) // Partículas solo en la ruta iluminada
+    .linkDirectionalParticleSpeed(0.008)
+    .linkDirectionalParticleWidth(3)
     .linkDirectionalParticleColor(() => '#ffffff')
 
-    // 3. NODOS: CRISTALES TRASLÚCIDOS
+    // 3. NODOS: CRISTALES NEÓN
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const baseColor = new THREE.Color(node.color);
       const size = node.val;
       const esRaiz = node.id === 'Omni-Eco' || node.name?.includes('Omnitron');
 
-      // Material físico simulando vidrio cristalino
+      // A) CRISTAL INTERNO (Material Avanzado)
       const material = new THREE.MeshPhysicalMaterial({
         color: baseColor,
         emissive: baseColor,
-        emissiveIntensity: 0.4,
+        emissiveIntensity: 1.5, // Brillo propio alto
         roughness: 0.1,
-        metalness: 0.2,
-        transmission: 0.6, 
+        transmission: 0.9, // Efecto vidrio
+        thickness: 1.5,
         transparent: true,
-        opacity: 0.7, // 70% sólido por defecto
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.1
+        opacity: 0.7 // 70% sólido inicial
       });
-      
       const mesh = new THREE.Mesh(geoSphere, material);
-      mesh.scale.set(size * 0.55, size * 0.55, size * 0.55); 
+      mesh.scale.set(size * 0.6, size * 0.6, size * 0.6);
       group.add(mesh);
 
+      // B) HALO DE NEÓN (Brillo difuminado exterior)
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: 0.2, // Resplandor sutil
+        blending: THREE.AdditiveBlending, // Mezcla de luz pura
+        depthWrite: false
+      });
+      const halo = new THREE.Mesh(geoSphere, haloMat);
+      halo.scale.set(size * 0.8, size * 0.8, size * 0.8);
+      group.add(halo);
+
+      // C) TIPOGRAFÍA CIBERPUNK VIVA
       const sprite = new SpriteText(node.name || node.id);
-      sprite.color = esRaiz ? '#ffffff' : node.color;
-      sprite.textHeight = esRaiz ? 4.0 : Math.max(2.5, size * 0.35);
-      sprite.position.y = size * 0.65 + 3.0;
-      sprite.fontFace = "'Rajdhani', sans-serif";
-      sprite.fontWeight = '700';
-      sprite.strokeColor = '#02040a';
-      sprite.strokeWidth = 1.5;
+      sprite.color = '#ffffff'; // Letras súper blancas
+      sprite.textHeight = esRaiz ? 3.5 : Math.max(1.8, size * 0.3);
+      sprite.position.y = size * 0.7 + 2.0;
+      sprite.fontFace = "'Orbitron', sans-serif";
+      sprite.fontWeight = '800';
+      // Borde del color del nodo para dar efecto neón al texto
+      sprite.strokeColor = node.color;
+      sprite.strokeWidth = 1.0; 
       group.add(sprite);
 
       return group;
     })
-    
-    // 4. INTERACCIONES Y DETENCIÓN DE ROTACIÓN
+
+    // 4. EVENTOS Y CONTROL DE CÁMARA
     .onNodeClick(node => {
-      isOrbiting = false; // Detiene universo y cámara
-      Graph.controls().autoRotate = false; 
+      const controls = Graph.controls();
+      controls.autoRotate = false; // Detiene la órbita automática
       
       document.getElementById('card-title').innerText = node.name;
       document.getElementById('card-id').innerText = node.id;
@@ -181,73 +191,69 @@ function renderizarGrafo(data) {
       }
       document.getElementById('info-card').style.display = 'block';
 
-      highlightNodes.clear(); highlightLinks.clear();
+      highlightNodes.clear(); 
+      highlightLinks.clear();
       
-      // Agrega vecinos inmediatos
       highlightNodes.add(node);
       if (node.neighbors) node.neighbors.forEach(v => highlightNodes.add(v));
-      if (node.links) node.links.forEach(l => highlightLinks.add(l));
       
-      // Trazar línea de vida hasta Omni-Eco
+      // Enciende el cordón hasta el centro
       trazarRutaAlNucleo(node);
       
       actualizarFiltroVisual(); 
-      const distRatio = 1 + 50 / Math.hypot(node.x, node.y, node.z);
-      Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 2000);
+      
+      // Zoom suave al nodo
+      const distRatio = 1 + 60 / Math.hypot(node.x, node.y, node.z);
+      Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 1500);
     })
     .onBackgroundClick(() => {
       document.getElementById('info-card').style.display = 'none';
-      highlightNodes.clear(); highlightLinks.clear();
+      highlightNodes.clear(); 
+      highlightLinks.clear();
       actualizarFiltroVisual();
       
-      isOrbiting = true; // Reactiva el universo
+      // Reactiva la órbita
       Graph.controls().autoRotate = true; 
     });
 
-  Graph.d3Force('charge').strength(-400);
-  Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 160 : 80);
+  // 5. CONFIGURACIÓN DE FÍSICA PARA RED DENSA
+  // Reducimos las distancias a la mitad para que no se vea el "efecto lejanía"
+  Graph.d3Force('charge').strength(-80); 
+  Graph.d3Force('link').distance(link => (link.source.id === 'Omni-Eco' || link.target.id === 'Omni-Eco') ? 70 : 25);
 
-  // FONDO ESPACIAL (MÁS PROFUNDO)
+  // 6. FONDO ESPACIAL ESTÁTICO
   const starsGeo = new THREE.BufferGeometry();
-  const starsCount = 5000;
+  const starsCount = 4000;
   const posArray = new Float32Array(starsCount * 3);
   for(let i = 0; i < starsCount * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 4000;
+    posArray[i] = (Math.random() - 0.5) * 3000;
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
-    size: 1.5, color: 0x88ccff, transparent: true, opacity: 0.6, sizeAttenuation: true
+    size: 1.2, color: 0x00f5d4, transparent: true, opacity: 0.4, sizeAttenuation: true
   });
-  const starMesh = new THREE.Points(starsGeo, starsMat);
-  Graph.scene().add(starMesh);
+  Graph.scene().add(new THREE.Points(starsGeo, starsMat));
   
-  // Iluminación para los cristales
-  Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.5));
-  const light = new THREE.DirectionalLight(0xffffff, 0.6);
+  // Luces para resaltar los cristales
+  Graph.scene().add(new THREE.AmbientLight(0xffffff, 0.8));
+  const light = new THREE.DirectionalLight(0xffffff, 1.5);
   light.position.set(100, 200, 100);
   Graph.scene().add(light);
 
-  // 5. CÁMARA LENTA Y CON INERCIA (Damping)
+  // 7. CONTROLES DE CÁMARA (INERCIA Y ÓRBITA LENTA)
   const controls = Graph.controls();
   controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.35; // Giro mucho más lento y sereno
-  controls.enableDamping = true;   // Activa el deslizamiento
-  controls.dampingFactor = 0.05;   // Sensibilidad del deslizamiento al soltar el ratón
+  controls.autoRotateSpeed = 0.2; // Muy lento, majestuoso
+  controls.enableDamping = true;  // Efecto deslizamiento (inercia)
+  controls.dampingFactor = 0.08;  // Depende de qué tan fuerte gires el mouse
   
+  // Si mueves manualmente, detiene la órbita. Al soltar, resbala por la inercia.
   controls.addEventListener('start', () => { controls.autoRotate = false; });
   controls.addEventListener('end', () => { 
-    if (isOrbiting) setTimeout(() => { controls.autoRotate = true; }, 2000); 
-  });
-
-  // Animación del fondo (se detiene al hacer clic)
-  let isOrbiting = true;
-  (function animarEstrellas() {
-    if (isOrbiting && starMesh) {
-      starMesh.rotation.y += 0.0001; // Rotación de estrellas ultralenta
-      starMesh.rotation.x += 0.00005;
+    if (highlightNodes.size === 0) {
+      setTimeout(() => { controls.autoRotate = true; }, 3000); 
     }
-    requestAnimationFrame(animarEstrellas);
-  })();
+  });
 }
 
 function actualizarFiltroVisual() {
@@ -255,36 +261,42 @@ function actualizarFiltroVisual() {
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
-      // Estado normal = 70% (0.7). 
-      // Enfocado = 30% (0.3). No enfocado (fondo) = 5% (0.05).
-      const opacityVal = hayFoco ? (enfocado ? 0.3 : 0.05) : 0.7;
-      node.__threeObj.children.forEach(child => {
-        if (child.material) {
-          child.material.opacity = opacityVal;
-        }
-      });
+      
+      // Control de opacidad:
+      // Cristal Interno: 70% normal, 30% si está enfocado, 5% si está apagado
+      const opacidadCristal = hayFoco ? (enfocado ? 0.3 : 0.05) : 0.7;
+      // Halo Neón: 20% normal, 60% enfocado (brilla más), 0% apagado
+      const opacidadHalo = hayFoco ? (enfocado ? 0.6 : 0.0) : 0.2;
+      // Texto: 100% normal, 100% enfocado, 5% apagado
+      const opacidadTexto = hayFoco ? (enfocado ? 1.0 : 0.05) : 1.0;
+
+      const group = node.__threeObj.children;
+      if (group[0] && group[0].material) group[0].material.opacity = opacidadCristal;
+      if (group[1] && group[1].material) group[1].material.opacity = opacidadHalo;
+      if (group[2] && group[2].material) group[2].material.opacity = opacidadTexto;
     }
   });
+  
+  // Recalcular enlaces
   Graph.linkColor(Graph.linkColor())
        .linkWidth(Graph.linkWidth())
        .linkDirectionalParticles(Graph.linkDirectionalParticles());
 }
 
+// LÓGICA DE BUSCADOR
 function volarHaciaNodo() {
   const texto = document.getElementById('buscador').value.toLowerCase().trim();
   if (!texto || !Graph) return;
   const target = Graph.graphData().nodes.find(n => 
     (n.id && n.id.toLowerCase().includes(texto)) || (n.name && n.name.toLowerCase().includes(texto))
   );
+  
   if (target) {
-    isOrbiting = false; 
     Graph.controls().autoRotate = false; 
     highlightNodes.clear(); highlightLinks.clear();
     
     highlightNodes.add(target);
     if (target.neighbors) target.neighbors.forEach(v => highlightNodes.add(v));
-    if (target.links) target.links.forEach(l => highlightLinks.add(l));
-    
     trazarRutaAlNucleo(target);
     
     document.getElementById('card-title').innerText = target.name;
@@ -300,8 +312,8 @@ function volarHaciaNodo() {
     document.getElementById('info-card').style.display = 'block';
     actualizarFiltroVisual();
     
-    const ratio = 1 + 50 / Math.hypot(target.x, target.y, target.z);
-    Graph.cameraPosition({ x: target.x * ratio, y: target.y * ratio, z: target.z * ratio }, target, 2000);
+    const ratio = 1 + 60 / Math.hypot(target.x, target.y, target.z);
+    Graph.cameraPosition({ x: target.x * ratio, y: target.y * ratio, z: target.z * ratio }, target, 1500);
   }
 }
 
