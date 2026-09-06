@@ -2,7 +2,7 @@
 // ECONOMITRÓN - NÚCLEO OPTIMIZADO V2.0 (CLEAN CODE)
 // ==============================================================================
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwdu1qchkzCilL5nqfzb33RjSTvAwtiZDfmEl2YGJszn2H48TTXWbzqkuv6gakR5R6vuw/exec';
 let Graph;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
