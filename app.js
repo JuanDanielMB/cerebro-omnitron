@@ -1,5 +1,5 @@
 // ==============================================================================
-// ECONOMITRÓN - NÚCLEO PURIFICADO Y CÁLCULO TOPOLÓGICO LOCAL
+// ECONOMITRÓN - FÍSICA DE FOTONES Y NAVEGACIÓN DOCUMENTAL DIRECTA
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
@@ -16,13 +16,20 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
-// Extrae el color real para teñir las partículas viajeras
-function colorDeArista(link) {
-  let sourceNode = link.source;
-  if (typeof link.source !== 'object' && Graph) {
-    sourceNode = Graph.graphData().nodes.find(n => n.id === link.source);
-  }
-  return (sourceNode && sourceNode.color) ? sourceNode.color : '#ffffff'; 
+// Amplifica la luminosidad RGB para que el pulso sea visible sobre fondo negro
+function colorLuminoso(hex) {
+  if (!hex || typeof hex !== 'string') return '#ffffff';
+  let cleanHex = hex.replace('#', '').trim();
+  if (cleanHex.length !== 6) return '#ffffff';
+  let r = parseInt(cleanHex.substring(0, 2), 16);
+  let g = parseInt(cleanHex.substring(2, 4), 16);
+  let b = parseInt(cleanHex.substring(4, 6), 16);
+  
+  // Realce de fotón para contraste sin Bloom
+  r = Math.min(255, Math.floor(r * 1.4 + 50));
+  g = Math.min(255, Math.floor(g * 1.4 + 50));
+  b = Math.min(255, Math.floor(b * 1.4 + 50));
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 fetch(urlSinCache, { cache: "no-store" })
@@ -30,29 +37,33 @@ fetch(urlSinCache, { cache: "no-store" })
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     
-    // 1. RECALCULAR CONEXIONES LOCALMENTE (Repara el error de "Conexiones: 0")
+    // 1. Recalcular grados de conexión localmente
     data.nodes.forEach(n => n.grado = 0);
     data.links.forEach(link => {
       let sourceId = typeof link.source === 'object' ? link.source.id : link.source;
       let targetId = typeof link.target === 'object' ? link.target.id : link.target;
       let s = data.nodes.find(n => n.id === sourceId);
       let t = data.nodes.find(n => n.id === targetId);
-      if(s) s.grado++;
-      if(t) t.grado++;
+      if (s) s.grado++;
+      if (t) t.grado++;
     });
 
-    // 2. APLICAR TAMAÑOS Y LIMPIAR COLORES (Columna H)
+    // 2. Normalización de URLs y colores
     data.nodes.forEach(n => {
       let baseSize = n.group === 'Raiz' ? 7 : (n.group === 'Asignatura' ? 4 : (n.group === 'Wormhole' ? 3 : 2));
       n.val = baseSize * (1 + (n.grado * 0.15));
       
       let colorHex = n.color ? n.color.toString().trim() : '';
-      if(colorHex === '' || colorHex === 'NaN' || colorHex === 'null') {
+      if (colorHex === '' || colorHex === 'NaN' || colorHex === 'null') {
         colorHex = '#ffffff'; 
       } else if (!colorHex.startsWith('#')) {
         colorHex = '#' + colorHex;
       }
       n.color = colorHex;
+
+      if (n.url && typeof n.url === 'string') {
+        n.url = n.url.trim();
+      }
     });
 
     renderizarGrafo(data);
@@ -81,8 +92,12 @@ function trazarRutaAlNucleo(startNode) {
       const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
       const targetId = typeof l.target === 'object' ? l.target.id : l.target;
 
-      if (sourceId === current.id && !visited.has(targetId)) neighbors.push(typeof l.target === 'object' ? l.target : Graph.graphData().nodes.find(n => n.id === targetId));
-      if (targetId === current.id && !visited.has(sourceId)) neighbors.push(typeof l.source === 'object' ? l.source : Graph.graphData().nodes.find(n => n.id === sourceId));
+      if (sourceId === current.id && !visited.has(targetId)) {
+        neighbors.push(typeof l.target === 'object' ? l.target : Graph.graphData().nodes.find(n => n.id === targetId));
+      }
+      if (targetId === current.id && !visited.has(sourceId)) {
+        neighbors.push(typeof l.source === 'object' ? l.source : Graph.graphData().nodes.find(n => n.id === sourceId));
+      }
     });
 
     for (let neighbor of neighbors) {
@@ -111,22 +126,25 @@ function trazarRutaAlNucleo(startNode) {
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#000000') // Fondo abismal absoluto, sin estrellas
+    .backgroundColor('#000000') 
     .showNavInfo(false)
     .cooldownTicks(200)
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS TOTALMENTE INVISIBLES EN REPOSO
-    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : 'rgba(0,0,0,0)') 
-    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.0)
-    .linkWidth(link => highlightLinks.has(link) ? 1.5 : 0.0)
+    // ARISTAS FANTASMA: Se anula el cuerpo físico del hilo (sin tubos cyan)
+    .linkColor(() => 'rgba(0,0,0,0)') 
+    .linkOpacity(0.0)
+    .linkWidth(0.0)
     
-    // PULSOS LUMINOSOS HEREDAN EL COLOR DE LA COLUMNA H
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 1) 
-    .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
-    .linkDirectionalParticleWidth(2.0)
-    .linkDirectionalParticleColor(link => highlightLinks.has(link) ? '#ffffff' : colorDeArista(link)) 
+    // PULSOS LUMINOSOS CONTINUOS Y VISIBLES
+    .linkDirectionalParticles(2) 
+    .linkDirectionalParticleSpeed(0.010)
+    .linkDirectionalParticleWidth(3.5)
+    .linkDirectionalParticleColor(link => {
+      const sourceNode = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
+      return sourceNode ? colorLuminoso(sourceNode.color) : '#ffffff';
+    })
 
     // NODOS
     .nodeThreeObject(node => {
@@ -134,7 +152,6 @@ function renderizarGrafo(data) {
       const esRaiz = node.group === 'Raiz';
       
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
-      
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
@@ -163,15 +180,20 @@ function renderizarGrafo(data) {
       document.getElementById('card-id').innerText = node.id;
       document.getElementById('card-grado').innerText = node.grado || 0;
       
+      // Integración del enlace documental
       const btnDoc = document.getElementById('btn-doc');
-      if (node.url && node.url.includes('http')) {
-        if(btnDoc) { btnDoc.href = node.url; btnDoc.style.display = 'inline-block'; }
-      } else {
-        if(btnDoc) btnDoc.style.display = 'none';
+      if (btnDoc) {
+        if (node.url && node.url.startsWith('http')) {
+          btnDoc.href = node.url;
+          btnDoc.style.display = 'block';
+        } else {
+          btnDoc.style.display = 'none';
+        }
       }
       document.getElementById('info-card').style.display = 'block';
 
-      highlightNodes.clear(); highlightLinks.clear();
+      highlightNodes.clear(); 
+      highlightLinks.clear();
       highlightNodes.add(node);
       
       data.links.forEach(l => {
@@ -191,18 +213,24 @@ function renderizarGrafo(data) {
       const distRatio = 1 + 45 / (dist === 0 ? 0.1 : dist); 
       Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 1500);
     })
+
+    // Doble clic para abrir el documento directamente
+    .onNodeDoubleClick(node => {
+      if (node.url && node.url.startsWith('http')) {
+        window.open(node.url, '_blank');
+      }
+    })
+
     .onBackgroundClick(() => {
       document.getElementById('info-card').style.display = 'none';
-      highlightNodes.clear(); highlightLinks.clear();
+      highlightNodes.clear(); 
+      highlightLinks.clear();
       actualizarFiltroVisual();
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
   // GRAVEDAD DINÁMICA
-  Graph.d3Force('charge').strength(node => {
-    return -60 - ((node.grado || 0) * 8); 
-  }); 
-  
+  Graph.d3Force('charge').strength(node => -60 - ((node.grado || 0) * 8)); 
   Graph.d3Force('link').distance(link => {
     const s = typeof link.source === 'object' ? link.source.id : link.source;
     const t = typeof link.target === 'object' ? link.target.id : link.target;
@@ -223,6 +251,8 @@ function renderizarGrafo(data) {
 
 function actualizarFiltroVisual() {
   const hayFoco = highlightNodes.size > 0;
+  
+  // 1. Atenuación de nodos no enfocados
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
@@ -235,11 +265,28 @@ function actualizarFiltroVisual() {
     }
   });
   
-  Graph.linkColor(Graph.linkColor())
-       .linkOpacity(Graph.linkOpacity())
-       .linkWidth(Graph.linkWidth())
-       .linkDirectionalParticles(Graph.linkDirectionalParticles())
-       .linkDirectionalParticleColor(Graph.linkDirectionalParticleColor());
+  // 2. Transición reactiva de pulsos (Instancias dinámicas para forzar redibujado)
+  Graph.linkDirectionalParticles(link => {
+    if (hayFoco) {
+      return highlightLinks.has(link) ? 5 : 0; 
+    }
+    return 2; 
+  });
+
+  Graph.linkDirectionalParticleSpeed(link => {
+    if (hayFoco) {
+      return highlightLinks.has(link) ? 0.018 : 0.008;
+    }
+    return 0.010;
+  });
+
+  Graph.linkDirectionalParticleColor(link => {
+    if (hayFoco && highlightLinks.has(link)) {
+      return '#00ffff'; // Fotones neón blanco/cyan en el camino enfocado
+    }
+    const sourceNode = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
+    return sourceNode ? colorLuminoso(sourceNode.color) : '#ffffff';
+  });
 }
 
 document.getElementById('btn-buscar').addEventListener('click', () => {
