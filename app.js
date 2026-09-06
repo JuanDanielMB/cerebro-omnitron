@@ -1,5 +1,5 @@
 // ==============================================================================
-// ECONOMITRÓN - FÍSICAS BLINDADAS (D3 / 3D-FORCE-GRAPH) Y HUD RESTAURADO
+// ECONOMITRÓN - NÚCLEO HÍBRIDO (3D-FORCE + APACHE ECHARTS)
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
@@ -7,10 +7,19 @@ let Graph;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
+// 1. UTILIDADES Y UI
 function switchTab(tabId) {
   document.querySelectorAll('.view-container, .tab-btn').forEach(el => el.classList.remove('active-view', 'active'));
   document.getElementById(tabId).classList.add('active-view');
   event.currentTarget.classList.add('active');
+  
+  // ECharts requiere redimensionamiento forzado al volverse visible
+  if (typeof echarts !== 'undefined') {
+    const s = echarts.getInstanceByDom(document.getElementById('sankey-chart'));
+    const t = echarts.getInstanceByDom(document.getElementById('treemap-chart'));
+    if (s) s.resize();
+    if (t) t.resize();
+  }
 }
 
 const colorBrillante100 = (hex) => {
@@ -20,11 +29,9 @@ const colorBrillante100 = (hex) => {
   return `#${rgb.map(x => x.toString(16).padStart(2, '0')).join('')}`;
 };
 
-// 1. ESCUDOS DE SEGURIDAD D3: Previenen el colapso a coordenadas (0,0,0)
 const getId = node => typeof node === 'object' ? node.id : node;
 const getNode = (node, nodes) => typeof node === 'object' ? node : nodes.find(n => n.id === node);
 
-// Restauración estricta de jerarquía de color
 function colorDeArista(link) {
   const nodes = Graph.graphData().nodes;
   const sourceNode = getNode(link.source, nodes);
@@ -62,12 +69,13 @@ function obtenerRutaNucleo(startNode, links, nodes) {
   return null;
 }
 
+// 2. INGESTA DE DATOS Y DESPLIEGUE HÍBRIDO
 fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
   .then(res => res.json())
   .then(data => {
     document.getElementById('loading').style.display = 'none';
 
-    // 2. FILTRO DE CUARENTENA CRÍTICO: Aniquila referencias rotas antes de que maten a D3
+    // Cuarentena de referencias rotas
     const nodeIds = new Set(data.nodes.map(n => n.id));
     data.links = data.links.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
 
@@ -86,24 +94,23 @@ fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
     });
 
     renderizarGrafo(data);
+    renderizarECharts(data); // <--- NUEVO MÓDULO ECHARTS
   })
   .catch(err => document.getElementById('loading').innerText = 'ERROR: ' + err.message);
 
+// 3. MOTOR WEBGL (TOPOLOGÍA 3D)
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
     .backgroundColor('#000000')
     .showNavInfo(false)
-
-    // LÍNEAS 2D Y FOTONES REDUCIDOS
     .linkColor(colorDeArista)
     .linkOpacity(0.25)
-    .linkWidth(0) // Obliga a WebGL a usar líneas de 1px en lugar del cilindro 3D
+    .linkWidth(0) 
     .linkDirectionalParticles(2)
     .linkDirectionalParticleSpeed(0.008)
     .linkDirectionalParticleWidth(1.2)
     .linkDirectionalParticleColor(colorDeArista)
-
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const mesh = new THREE.Mesh(
@@ -120,16 +127,10 @@ function renderizarGrafo(data) {
       group.add(mesh, sprite);
       return group;
     })
-
     .onNodeClick(node => {
       Graph.controls().autoRotate = false;
-      
-      // 3. INYECCIÓN Z-INDEX: Garantiza que el HUD flote por encima del renderizado WebGL
       const infoCard = document.getElementById('info-card');
-      if (infoCard) {
-        infoCard.style.display = 'block';
-        infoCard.style.zIndex = '1000'; 
-      }
+      if (infoCard) { infoCard.style.display = 'block'; infoCard.style.zIndex = '1000'; }
       
       document.getElementById('card-title').innerText = node.name;
       document.getElementById('card-id').innerText = node.id;
@@ -176,9 +177,7 @@ function renderizarGrafo(data) {
       const d = Math.hypot(node.x, node.y, node.z) || 0.1;
       Graph.cameraPosition({ x: node.x * (1 + 45/d), y: node.y * (1 + 45/d), z: node.z * (1 + 45/d) }, node, 1500);
     })
-    
     .onNodeDoubleClick(node => { if (node.url && node.url.startsWith('http')) window.open(node.url, '_blank'); })
-    
     .onBackgroundClick(() => {
       document.getElementById('info-card').style.display = 'none';
       highlightNodes.clear(); highlightLinks.clear();
@@ -186,7 +185,6 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // 4. GRAVEDAD BLINDADA
   Graph.d3Force('charge').strength(n => -60 - ((n.grado || 0) * 8));
   Graph.d3Force('link').distance(l => {
     const sId = getId(l.source);
@@ -202,7 +200,6 @@ function renderizarGrafo(data) {
 
 function actualizarFiltroVisual() {
   const hayFoco = highlightNodes.size > 0;
-
   Graph.graphData().nodes.forEach(n => {
     if (n.__threeObj) {
       const enfocado = highlightNodes.has(n);
@@ -211,24 +208,111 @@ function actualizarFiltroVisual() {
     }
   });
 
-  Graph.linkColor(l => {
-        if (!hayFoco) return colorDeArista(l);
-        return highlightLinks.has(l) ? '#00ffff' : colorDeArista(l);
-      })
-       .linkOpacity(l => {
-        if (!hayFoco) return 0.25;
-        return highlightLinks.has(l) ? 0.9 : 0.02;
-      })
+  Graph.linkColor(l => hayFoco ? (highlightLinks.has(l) ? '#00ffff' : colorDeArista(l)) : colorDeArista(l))
+       .linkOpacity(l => hayFoco ? (highlightLinks.has(l) ? 0.9 : 0.02) : 0.25)
        .linkDirectionalParticles(l => hayFoco ? (highlightLinks.has(l) ? 5 : 0) : 2)
        .linkDirectionalParticleSpeed(l => hayFoco && highlightLinks.has(l) ? 0.020 : 0.008)
        .linkDirectionalParticleColor(l => hayFoco && highlightLinks.has(l) ? '#ffffff' : colorDeArista(l));
 }
 
+// 4. MOTOR APACHE ECHARTS (SANKEY & TREEMAP)
+function renderizarECharts(data) {
+  // Configuración Sankey (Flujos)
+  const sankeyDom = document.getElementById('sankey-chart');
+  if (sankeyDom) {
+    const sankeyChart = echarts.init(sankeyDom);
+    
+    // Preparar Nodos Sankey
+    const sNodes = data.nodes.map(n => ({ 
+      name: n.id, 
+      label: { formatter: n.name }, 
+      itemStyle: { color: n.color } 
+    }));
+    
+    // Preparar Aristas Sankey (Filtradas para evitar ciclos que rompan ECharts)
+    const sLinks = [];
+    data.links.forEach(l => {
+      const sId = getId(l.source);
+      const tId = getId(l.target);
+      const sNode = getNode(sId, data.nodes);
+      const tNode = getNode(tId, data.nodes);
+      
+      // Regla de Flujo Aceptado: Raíz -> Asignatura -> Término
+      let isValidFlow = false;
+      if (sNode && tNode) {
+        if (sNode.group === 'Raiz' && tNode.group === 'Asignatura') isValidFlow = true;
+        if (sNode.group === 'Asignatura' && tNode.group === 'Termino') isValidFlow = true;
+      }
+      
+      if (isValidFlow) {
+        sLinks.push({ source: sId, target: tId, value: 1 });
+      }
+    });
+
+    sankeyChart.setOption({
+      backgroundColor: '#000000',
+      tooltip: { trigger: 'item', triggerOn: 'mousemove' },
+      series: [{
+        type: 'sankey',
+        layout: 'none',
+        emphasis: { focus: 'adjacency' },
+        nodeAlign: 'left',
+        data: sNodes,
+        links: sLinks,
+        lineStyle: { color: 'source', curveness: 0.5, opacity: 0.2 },
+        label: { color: '#ffffff', fontFamily: 'Rajdhani', fontSize: 12 }
+      }]
+    });
+  }
+
+  // Configuración Treemap (Densidad Jerárquica)
+  const treeDom = document.getElementById('treemap-chart');
+  if (treeDom) {
+    const treeChart = echarts.init(treeDom);
+    
+    // Construir Jerarquía
+    const rootTree = { name: 'Omni-Eco', itemStyle: { color: '#0055ff' }, children: [] };
+    const asignaturas = data.nodes.filter(n => n.group === 'Asignatura');
+    
+    asignaturas.forEach(a => {
+      const hijosTerminos = data.nodes.filter(n => n.group === 'Termino' && data.links.some(l => 
+        (getId(l.source) === a.id && getId(l.target) === n.id) || 
+        (getId(l.target) === a.id && getId(l.source) === n.id)
+      ));
+      
+      rootTree.children.push({
+        name: a.name,
+        value: 1 + hijosTerminos.length, // El tamaño del bloque depende de cuántos términos tiene
+        itemStyle: { color: a.color },
+        children: hijosTerminos.map(c => ({
+          name: c.name,
+          value: 1,
+          itemStyle: { color: c.color }
+        }))
+      });
+    });
+
+    treeChart.setOption({
+      backgroundColor: '#000000',
+      tooltip: { formatter: '{b}' },
+      series: [{
+        type: 'treemap',
+        data: [rootTree],
+        roam: true,
+        nodeClick: 'zoomToNode',
+        itemStyle: { borderColor: '#000', borderWidth: 2 },
+        label: { color: '#fff', fontFamily: 'Rajdhani', fontSize: 14, fontWeight: 'bold' },
+        breadcrumb: { itemStyle: { color: '#00ffff' }, textStyle: { color: '#fff' } }
+      }]
+    });
+  }
+}
+
+// Buscador 3D
 document.getElementById('btn-buscar').addEventListener('click', () => {
   const txt = document.getElementById('buscador').value.toLowerCase().trim();
   if (!txt || !Graph) return;
   const target = Graph.graphData().nodes.find(n => (n.id && n.id.toLowerCase().includes(txt)) || (n.name && n.name.toLowerCase().includes(txt)));
-
   if (target) {
     const d = Math.hypot(target.x, target.y, target.z) || 0.1;
     Graph.cameraPosition({ x: target.x * (1 + 60/d), y: target.y * (1 + 60/d), z: target.z * (1 + 60/d) }, target, 1500);
