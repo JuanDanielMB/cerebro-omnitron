@@ -1,8 +1,8 @@
 // ==============================================================================
-// ECONOMITRÓN - CRISTALES SÓLIDOS, LÁSER Y TABS (RESTAURADO)
+// ECONOMITRÓN - COLORES MATRICIALES Y JERARQUÍA DE ARISTAS
 // ==============================================================================
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec'; // Verifica que sea tu URL correcta
+const API_URL = 'https://script.google.com/macros/s/AKfycbxwlwQ34zTxST-dPhe3OH4hdsY3GUqugpKB_eNipEI1bwpsiXi2coLULSsiky9AJonB9Q/exec';
 
 let Graph;
 const highlightNodes = new Set();
@@ -13,6 +13,17 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active-view');
   event.currentTarget.classList.add('active');
+}
+
+// Lógica de colores para las aristas según jerarquía
+function colorDeArista(link) {
+  if (!link.source || !link.source.group) return '#ffffff';
+  switch (link.source.group) {
+    case 'Raiz': return '#0055ff';       // Omni-Eco (Azul)
+    case 'Asignatura': return '#b100ff'; // Asignaturas (Morado)
+    case 'Termino': return '#000080';    // Términos (Azul Marino)
+    default: return '#ffffff';           // Conexiones/Wormholes (Blanco)
+  }
 }
 
 fetch(API_URL)
@@ -48,7 +59,6 @@ function trazarRutaAlNucleo(startNode) {
       break;
     }
 
-    // Buscar vecinos mediante las aristas
     const neighbors = [];
     linksArray.forEach(l => {
       if (l.source.id === current.id && !visited.has(l.target.id)) neighbors.push(l.target);
@@ -83,39 +93,37 @@ function renderizarGrafo(data) {
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS LÁSER (Delgadas y con apagado estricto)
-    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : '#00d2ff') 
+    // ARISTAS JERÁRQUICAS Y LÁSER
+    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
     .linkVisibility(link => {
       if (highlightNodes.size === 0) return true;
       return highlightLinks.has(link);
     })
     .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.25; 
-      return highlightLinks.has(link) ? 0.8 : 0.0; 
+      if (highlightNodes.size === 0) return 0.35; // Visibilidad base de las aristas jerárquicas
+      return highlightLinks.has(link) ? 0.9 : 0.0; 
     })
     .linkWidth(link => {
-      if (highlightNodes.size === 0) return 0.3; 
-      return highlightLinks.has(link) ? 0.8 : 0.0; 
+      if (highlightNodes.size === 0) return 0.5; 
+      return highlightLinks.has(link) ? 1.0 : 0.0; 
     })
-    // Direccionalidad reflejada en partículas, no en flechas gigantes
     .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 0) 
     .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
-    .linkDirectionalParticleWidth(2.0)
+    .linkDirectionalParticleWidth(2.5)
     .linkDirectionalParticleColor(() => '#ffffff') 
 
-    // NODOS HOLOGRÁFICOS RESTAURADOS
+    // NODOS HOLOGRÁFICOS EXTRATOS (Colores Reales)
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.group === 'Raiz';
       
-      // Aumento Lumínico: +0.1 por grado
       const extraGlow = Math.min((node.grado || 0) * 0.1, 0.4);
 
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
       const material = new THREE.MeshBasicMaterial({ 
-        color: node.color,
+        color: node.color, // Lee estrictamente tu matriz
         transparent: true,
-        opacity: 0.55 + extraGlow, // Solidez base + brillo por conexiones
+        opacity: 0.55 + extraGlow,
         depthWrite: false, 
         blending: THREE.AdditiveBlending 
       });
@@ -151,7 +159,6 @@ function renderizarGrafo(data) {
       highlightNodes.clear(); highlightLinks.clear();
       highlightNodes.add(node);
       
-      // Resaltar conexiones inmediatas
       data.links.forEach(l => {
         if (l.source.id === node.id || l.target.id === node.id) {
           highlightLinks.add(l);
@@ -175,7 +182,7 @@ function renderizarGrafo(data) {
 
   Graph.d3Force('charge').strength(-180); 
 
-  // MICRO-ESTRELLAS ILUMINADAS RESTAURADAS
+  // MICRO-ESTRELLAS
   const starsGeo = new THREE.BufferGeometry();
   const starsCount = 2000;
   const posArray = new Float32Array(starsCount * 3);
@@ -189,7 +196,7 @@ function renderizarGrafo(data) {
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
 
-  // FILTRO BLOOM (Luz dinámica controlada)
+  // FILTRO BLOOM
   const bloomPass = new THREE.UnrealBloomPass();
   bloomPass.strength = 0.45;  
   bloomPass.radius = 0.15;    
