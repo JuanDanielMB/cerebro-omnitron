@@ -2,25 +2,19 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Economitrón - Diagnóstico Estructural</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <title>Economitrón - Cerebro Digital</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Librerías Externas -->
+  <!-- Librerías Core (Renderizado Vectorial y Topológico) -->
   <script src="https://unpkg.com/three@0.136.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
   <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
-
-  <!-- Shaders (Bloom) -->
-  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 </head>
 <body>
   
-  <!-- Barra de Navegación Corporativa -->
+  <!-- Barra de Navegación -->
   <nav class="top-nav">
     <div class="logo">
       <h1>ECONOMITRÓN</h1>
@@ -37,29 +31,28 @@
     </div>
   </nav>
 
+  <!-- UX Carga -->
   <div id="loading">Sintetizando matriz topológica...</div>
 
-  <!-- Contenedores de Vistas -->
+  <!-- Vistas Dinámicas -->
   <div id="tab-3d" class="view-container active-view">
     <div id="graph-container"></div>
+    
+    <!-- HUD de Nodo -->
     <div id="info-card">
       <h4 id="card-title">Nodo</h4>
       <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
       <p><span class="highlight">Conexiones:</span> <span id="card-grado"></span></p>
       <a id="btn-doc" href="#" target="_blank" class="doc-btn" style="display: none;">ABRIR DOCUMENTO ↗</a>
     </div>
-      <h4 id="card-title">Nodo</h4>
-      <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
-      <p><span class="highlight">Conexiones:</span> <span id="card-grado"></span></p>
-    </div>
   </div>
 
   <div id="tab-sankey" class="view-container">
-    <div class="placeholder-text">Renderizador Sankey (D3.js) - Módulo en preparación para mapeo de flujo de capitales y requisitos.</div>
+    <div class="placeholder-text">Renderizador Sankey (D3.js) - Módulo en preparación.</div>
   </div>
 
   <div id="tab-treemap" class="view-container">
-    <div class="placeholder-text">Renderizador Treemap (D3.js) - Módulo en preparación para análisis volumétrico jerárquico.</div>
+    <div class="placeholder-text">Renderizador Treemap (D3.js) - Módulo en preparación.</div>
   </div>
 
   <script src="app.js"></script>
