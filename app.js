@@ -1,20 +1,18 @@
 // ==============================================================================
-// ECONOMITRÓN - NÚCLEO OPTIMIZADO V2.0 (CLEAN CODE)
+// ECONOMITRÓN - ARISTAS JERÁRQUICAS Y FOTONES REDUCIDOS
 // ==============================================================================
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwdu1qchkzCilL5nqfzb33RjSTvAwtiZDfmEl2YGJszn2H48TTXWbzqkuv6gakR5R6vuw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
 let Graph;
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
-// 1. UTILIDADES Y UI
 function switchTab(tabId) {
   document.querySelectorAll('.view-container, .tab-btn').forEach(el => el.classList.remove('active-view', 'active'));
   document.getElementById(tabId).classList.add('active-view');
   event.currentTarget.classList.add('active');
 }
 
-// Inyección de 100% brillo en colores
 const colorBrillante100 = (hex) => {
   let c = (hex || '').replace('#', '').trim();
   if (c.length !== 6) return '#ffffff';
@@ -22,7 +20,16 @@ const colorBrillante100 = (hex) => {
   return `#${rgb.map(x => x.toString(16).padStart(2, '0')).join('')}`;
 };
 
-// Algoritmo BFS simplificado para encontrar la raíz
+// Restauración de colores según la Arquitectura Maestra
+function colorDeArista(link) {
+  const sourceNode = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
+  if (!sourceNode) return 'rgba(255, 255, 255, 0.2)';
+  if (sourceNode.group === 'Raiz') return '#0055ff';       // Azul Neón
+  if (sourceNode.group === 'Asignatura') return '#b100ff'; // Morado
+  if (sourceNode.group === 'Termino') return '#000080';    // Azul Marino
+  return '#ffffff';
+}
+
 function obtenerRutaNucleo(startNode, links) {
   const queue = [[startNode]];
   const visited = new Set([startNode.id]);
@@ -30,7 +37,6 @@ function obtenerRutaNucleo(startNode, links) {
   while (queue.length > 0) {
     const path = queue.shift();
     const current = path[path.length - 1];
-    
     if (current.id === 'Omni-Eco' || current.group === 'Raiz') return path;
     
     links.forEach(l => {
@@ -44,13 +50,11 @@ function obtenerRutaNucleo(startNode, links) {
   return null;
 }
 
-// 2. INGESTA DE DATOS (ETL LOCAL)
 fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
   .then(res => res.json())
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     
-    // Cálculo de grados (Conexiones)
     data.nodes.forEach(n => n.grado = 0);
     data.links.forEach(l => {
       const s = data.nodes.find(n => n.id === l.source);
@@ -58,7 +62,6 @@ fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
       if (s) s.grado++; if (t) t.grado++;
     });
 
-    // Sanitización y Escalamiento
     data.nodes.forEach(n => {
       const baseSize = n.group === 'Raiz' ? 7 : (n.group === 'Asignatura' ? 4 : 2);
       n.val = baseSize * (1 + (n.grado * 0.15));
@@ -70,21 +73,22 @@ fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
   })
   .catch(err => document.getElementById('loading').innerText = 'ERROR: ' + err.message);
 
-// 3. MOTOR DE RENDERIZADO WEBGL
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
     .backgroundColor('#000000')
     .showNavInfo(false)
     
-    // ARISTAS INVISIBLES Y FOTONES
-    .linkColor(() => 'rgba(0,0,0,0)') 
+    // ARISTAS VISIBLES COMO LÍNEAS 2D (Sin linkWidth)
+    .linkColor(colorDeArista) 
+    .linkOpacity(0.25)
+    
+    // FOTONES PEQUEÑOS Y SUTILES
     .linkDirectionalParticles(2) 
     .linkDirectionalParticleSpeed(0.008)
-    .linkDirectionalParticleWidth(3.0)
-    .linkDirectionalParticleColor(l => l.source.color || '#ffffff')
+    .linkDirectionalParticleWidth(1.2) // Tamaño drásticamente reducido
+    .linkDirectionalParticleColor(colorDeArista)
 
-    // GEOMETRÍA DE NODOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const mesh = new THREE.Mesh(
@@ -102,7 +106,6 @@ function renderizarGrafo(data) {
       return group;
     })
 
-    // INTERACCIÓN
     .onNodeClick(node => {
       Graph.controls().autoRotate = false;
       document.getElementById('card-title').innerText = node.name;
@@ -120,15 +123,12 @@ function renderizarGrafo(data) {
       highlightNodes.add(node);
 
       const links = Graph.graphData().links;
-      
-      // Enfocar vecinos directos
       links.forEach(l => {
         if (l.source.id === node.id || l.target.id === node.id) {
           highlightLinks.add(l); highlightNodes.add(l.source); highlightNodes.add(l.target);
         }
       });
       
-      // Trazar cordón umbilical
       const path = obtenerRutaNucleo(node, links);
       if (path) {
         path.forEach(n => highlightNodes.add(n));
@@ -150,7 +150,6 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // FÍSICAS ESTABILIZADAS
   Graph.d3Force('charge').strength(n => -60 - ((n.grado || 0) * 8)); 
   Graph.d3Force('link').distance(l => (l.source.id === 'Omni-Eco' || l.target.id === 'Omni-Eco') ? 80 : 35);
 
@@ -160,7 +159,6 @@ function renderizarGrafo(data) {
   Graph.controls().addEventListener('start', () => Graph.controls().autoRotate = false);
 }
 
-// 4. SHADER DINÁMICO DE ESTADOS
 function actualizarFiltroVisual() {
   const hayFoco = highlightNodes.size > 0;
   
@@ -172,12 +170,19 @@ function actualizarFiltroVisual() {
     }
   });
   
-  Graph.linkDirectionalParticles(l => hayFoco ? (highlightLinks.has(l) ? 6 : 0) : 2)
+  Graph.linkColor(l => {
+        if (!hayFoco) return colorDeArista(l);
+        return highlightLinks.has(l) ? '#00ffff' : colorDeArista(l);
+      })
+       .linkOpacity(l => {
+        if (!hayFoco) return 0.25;
+        return highlightLinks.has(l) ? 0.9 : 0.02;
+      })
+       .linkDirectionalParticles(l => hayFoco ? (highlightLinks.has(l) ? 5 : 0) : 2)
        .linkDirectionalParticleSpeed(l => hayFoco && highlightLinks.has(l) ? 0.020 : 0.008)
-       .linkDirectionalParticleColor(l => hayFoco && highlightLinks.has(l) ? '#ffffff' : (l.source.color || '#ffffff'));
+       .linkDirectionalParticleColor(l => hayFoco && highlightLinks.has(l) ? '#ffffff' : colorDeArista(l));
 }
 
-// 5. MOTOR DE BÚSQUEDA
 document.getElementById('btn-buscar').addEventListener('click', () => {
   const txt = document.getElementById('buscador').value.toLowerCase().trim();
   if (!txt || !Graph) return;
