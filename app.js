@@ -1,9 +1,9 @@
 // ==============================================================================
-// ECONOMITRÓN - COLORES MATRICIALES, JERARQUÍA Y GRAVEDAD ESTABLE
+// ECONOMITRÓN - FÍSICAS DINÁMICAS, ARISTAS INVISIBLES Y COLORES PUROS
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
-const urlSinCache = API_URL + "?t=" + new Date().getTime(); // Destructor de caché
+const urlSinCache = API_URL + "?t=" + new Date().getTime(); 
 
 let Graph;
 const highlightNodes = new Set();
@@ -16,21 +16,18 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
-// NUEVA LÓGICA DE COLORES (A prueba de fallos de inicialización)
 function colorDeArista(link) {
-  // Buscamos el nodo fuente sin importar si el motor ya lo procesó o si apenas está cargando
   let sourceNode = link.source;
   if (typeof link.source !== 'object' && Graph) {
     sourceNode = Graph.graphData().nodes.find(n => n.id === link.source);
   }
-  
-  if (!sourceNode || !sourceNode.group) return 'rgba(255, 255, 255, 0.2)'; // Blanco sutil por defecto
+  if (!sourceNode || !sourceNode.group) return 'rgba(255, 255, 255, 0.2)'; 
   
   switch (sourceNode.group) {
-    case 'Raiz': return '#0055ff';       // Omni-Eco (Azul)
-    case 'Asignatura': return '#b100ff'; // Asignaturas (Morado)
-    case 'Termino': return '#000080';    // Términos (Azul Marino)
-    default: return '#ffffff';           // Conexiones/Wormholes (Blanco)
+    case 'Raiz': return '#0055ff';       
+    case 'Asignatura': return '#b100ff'; 
+    case 'Termino': return '#000080';    
+    default: return '#ffffff';           
   }
 }
 
@@ -39,10 +36,11 @@ fetch(urlSinCache, { cache: "no-store" })
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     
-    // Crecimiento orgánico: +0.1% por grado
+    // Crecimiento dinámico de la masa: tamaños base reducidos a la mitad
     data.nodes.forEach(n => {
-      let baseSize = n.group === 'Raiz' ? 14 : (n.group === 'Asignatura' ? 8 : (n.group === 'Wormhole' ? 6 : 4));
-      n.val = baseSize * (1 + ((n.grado || 0) * 0.1));
+      let baseSize = n.group === 'Raiz' ? 7 : (n.group === 'Asignatura' ? 4 : (n.group === 'Wormhole' ? 3 : 2));
+      // Escala volumétrica: gana 15% de tamaño adicional por cada conexión
+      n.val = baseSize * (1 + ((n.grado || 0) * 0.15));
       n.color = n.color || '#ffffff';
     });
 
@@ -69,7 +67,6 @@ function trazarRutaAlNucleo(startNode) {
 
     const neighbors = [];
     linksArray.forEach(l => {
-      // Evaluamos de forma segura si la arista es un objeto o texto
       const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
       const targetId = typeof l.target === 'object' ? l.target.id : l.target;
 
@@ -103,39 +100,40 @@ function trazarRutaAlNucleo(startNode) {
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#040509') 
+    .backgroundColor('#000000') // Fondo negro absoluto para máximo contraste
     .showNavInfo(false)
     .cooldownTicks(200)
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS JERÁRQUICAS LÁSER
+    // ARISTAS INVISIBLES Y PARTICULAS
     .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
     .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.2; // SÚPER SUTIL en estado de reposo para que no ensucie
-      return highlightLinks.has(link) ? 0.9 : 0.0; // 0.0 al enfocar un nodo, para limpiar la pantalla
+      if (highlightNodes.size === 0) return 0.02; // Aristas prácticamente invisibles en reposo
+      return highlightLinks.has(link) ? 0.9 : 0.0; 
     })
     .linkWidth(link => {
-      if (highlightNodes.size === 0) return 0.3; // Hilos muy finitos por defecto
-      return highlightLinks.has(link) ? 1.5 : 0.0; // Láser grueso al hacer clic
+      if (highlightNodes.size === 0) return 0.1; // Hilo microscópico
+      return highlightLinks.has(link) ? 1.5 : 0.0; 
     })
-    .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 0) 
+    // Partículas luminosas viajando por el hilo invisible
+    .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 1) 
     .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
-    .linkDirectionalParticleWidth(2.5)
+    .linkDirectionalParticleWidth(2.0)
     .linkDirectionalParticleColor(() => '#ffffff') 
 
-    // NODOS HOLOGRÁFICOS EXTRATOS
+    // NODOS PUROS (Sin Bloom)
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.group === 'Raiz';
       
-      const extraGlow = Math.min((node.grado || 0) * 0.1, 0.4);
-
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
+      
+      // Conservamos AdditiveBlending, pero elevamos la opacidad para asegurar que el color de la Matriz sea intenso
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
-        opacity: 0.55 + extraGlow,
+        opacity: 0.85, 
         depthWrite: false, 
         blending: THREE.AdditiveBlending 
       });
@@ -144,8 +142,8 @@ function renderizarGrafo(data) {
 
       const sprite = new SpriteText(node.name || node.id);
       sprite.color = 'rgba(255, 255, 255, 0.9)'; 
-      sprite.textHeight = esRaiz ? 3.5 : Math.max(1.8, node.val * 0.35);
-      sprite.position.y = (node.val * 0.8) + 2.5;
+      sprite.textHeight = esRaiz ? 3.0 : Math.max(1.5, node.val * 0.4);
+      sprite.position.y = (node.val * 0.8) + 2.0;
       sprite.fontFace = "'Rajdhani', sans-serif";
       sprite.fontWeight = '700';
       group.add(sprite);
@@ -162,7 +160,7 @@ function renderizarGrafo(data) {
       
       const btnDoc = document.getElementById('btn-doc');
       if (node.url && node.url.includes('http')) {
-        btnDoc.href = node.url; btnDoc.style.display = 'inline-block';
+        if(btnDoc) { btnDoc.href = node.url; btnDoc.style.display = 'inline-block'; }
       } else {
         if(btnDoc) btnDoc.style.display = 'none';
       }
@@ -185,7 +183,7 @@ function renderizarGrafo(data) {
       actualizarFiltroVisual(); 
       
       const dist = Math.hypot(node.x, node.y, node.z);
-      const distRatio = 1 + 55 / (dist === 0 ? 0.1 : dist); 
+      const distRatio = 1 + 45 / (dist === 0 ? 0.1 : dist); 
       Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 1500);
     })
     .onBackgroundClick(() => {
@@ -195,8 +193,11 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // GRAVEDAD PERFECTA
-  Graph.d3Force('charge').strength(-180); 
+  // GRAVEDAD DINÁMICA: Aumenta la repulsión según la cantidad de conexiones del nodo
+  Graph.d3Force('charge').strength(node => {
+    return -60 - ((node.grado || 0) * 8); 
+  }); 
+  
   Graph.d3Force('link').distance(link => {
     const s = typeof link.source === 'object' ? link.source.id : link.source;
     const t = typeof link.target === 'object' ? link.target.id : link.target;
@@ -212,18 +213,12 @@ function renderizarGrafo(data) {
   }
   starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   const starsMat = new THREE.PointsMaterial({
-    size: 2.2, color: 0x88ffff, transparent: true, opacity: 0.9, sizeAttenuation: true
+    size: 1.5, color: 0x55aaaa, transparent: true, opacity: 0.6, sizeAttenuation: true
   });
   const starMesh = new THREE.Points(starsGeo, starsMat);
   Graph.scene().add(starMesh);
 
-  // FILTRO BLOOM
-  const bloomPass = new THREE.UnrealBloomPass();
-  bloomPass.strength = 0.45;  
-  bloomPass.radius = 0.15;    
-  bloomPass.threshold = 0.2;  
-  Graph.postProcessingComposer().addPass(bloomPass);
-
+  // CONTROL DE CÁMARA
   const controls = Graph.controls();
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.3; 
@@ -248,9 +243,7 @@ function actualizarFiltroVisual() {
   Graph.graphData().nodes.forEach(node => {
     if (node.__threeObj) {
       const enfocado = highlightNodes.has(node);
-      const extraGlow = Math.min((node.grado || 0) * 0.1, 0.4);
-      
-      const opacidadCristal = hayFoco ? (enfocado ? 0.85 : 0.05) : 0.55 + extraGlow;
+      const opacidadCristal = hayFoco ? (enfocado ? 1.0 : 0.05) : 0.85;
       const opacidadTexto = hayFoco ? (enfocado ? 1.0 : 0.0) : 1.0;
 
       const group = node.__threeObj.children;
@@ -259,7 +252,6 @@ function actualizarFiltroVisual() {
     }
   });
   
-  // Recalcular estilos visuales seguros
   Graph.linkColor(Graph.linkColor())
        .linkOpacity(Graph.linkOpacity())
        .linkWidth(Graph.linkWidth())
