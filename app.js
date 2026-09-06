@@ -1,8 +1,9 @@
 // ==============================================================================
-// ECONOMITRÓN - COLORES MATRICIALES Y JERARQUÍA DE ARISTAS
+// ECONOMITRÓN - COLORES MATRICIALES, JERARQUÍA Y GRAVEDAD ESTABLE
 // ==============================================================================
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxwlwQ34zTxST-dPhe3OH4hdsY3GUqugpKB_eNipEI1bwpsiXi2coLULSsiky9AJonB9Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
+const urlSinCache = API_URL + "?t=" + new Date().getTime(); // Destructor de caché
 
 let Graph;
 const highlightNodes = new Set();
@@ -26,7 +27,7 @@ function colorDeArista(link) {
   }
 }
 
-fetch(API_URL)
+fetch(urlSinCache, { cache: "no-store" })
   .then(res => res.json())
   .then(data => {
     document.getElementById('loading').style.display = 'none';
@@ -93,15 +94,12 @@ function renderizarGrafo(data) {
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS JERÁRQUICAS Y LÁSER
+    // ARISTAS JERÁRQUICAS (Sin romper la gravedad)
     .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
-    .linkVisibility(link => {
-      if (highlightNodes.size === 0) return true;
-      return highlightLinks.has(link);
-    })
+    // ELIMINADO: .linkVisibility() para evitar explosiones físicas
     .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.35; // Visibilidad base de las aristas jerárquicas
-      return highlightLinks.has(link) ? 0.9 : 0.0; 
+      if (highlightNodes.size === 0) return 0.35; // Visibles en estado normal
+      return highlightLinks.has(link) ? 0.9 : 0.0; // 0.0 las oculta pero MANTIENE la física activa
     })
     .linkWidth(link => {
       if (highlightNodes.size === 0) return 0.5; 
@@ -112,7 +110,7 @@ function renderizarGrafo(data) {
     .linkDirectionalParticleWidth(2.5)
     .linkDirectionalParticleColor(() => '#ffffff') 
 
-    // NODOS HOLOGRÁFICOS EXTRATOS (Colores Reales)
+    // NODOS HOLOGRÁFICOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.group === 'Raiz';
@@ -121,7 +119,7 @@ function renderizarGrafo(data) {
 
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
       const material = new THREE.MeshBasicMaterial({ 
-        color: node.color, // Lee estrictamente tu matriz
+        color: node.color,
         transparent: true,
         opacity: 0.55 + extraGlow,
         depthWrite: false, 
@@ -170,7 +168,9 @@ function renderizarGrafo(data) {
       trazarRutaAlNucleo(node);
       actualizarFiltroVisual(); 
       
-      const distRatio = 1 + 55 / Math.hypot(node.x, node.y, node.z);
+      // Matemática segura para evitar que la cámara colapse si el nodo está en el centro exacto (0,0,0)
+      const dist = Math.hypot(node.x, node.y, node.z);
+      const distRatio = 1 + 55 / (dist === 0 ? 0.1 : dist); 
       Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 1500);
     })
     .onBackgroundClick(() => {
@@ -180,7 +180,13 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
+  // Gravedad estabilizada
   Graph.d3Force('charge').strength(-180); 
+  Graph.d3Force('link').distance(link => {
+    const s = typeof link.source === 'object' ? link.source.id : link.source;
+    const t = typeof link.target === 'object' ? link.target.id : link.target;
+    return (s === 'Omni-Eco' || t === 'Omni-Eco') ? 80 : 35;
+  });
 
   // MICRO-ESTRELLAS
   const starsGeo = new THREE.BufferGeometry();
@@ -241,7 +247,6 @@ function actualizarFiltroVisual() {
   Graph.linkColor(Graph.linkColor())
        .linkOpacity(Graph.linkOpacity())
        .linkWidth(Graph.linkWidth())
-       .linkVisibility(Graph.linkVisibility())
        .linkDirectionalParticles(Graph.linkDirectionalParticles());
 }
 
@@ -253,7 +258,8 @@ document.getElementById('btn-buscar').addEventListener('click', () => {
   );
   
   if (target) {
-    const ratio = 1 + 60 / Math.hypot(target.x, target.y, target.z);
+    const dist = Math.hypot(target.x, target.y, target.z);
+    const ratio = 1 + 60 / (dist === 0 ? 0.1 : dist);
     Graph.cameraPosition({ x: target.x * ratio, y: target.y * ratio, z: target.z * ratio }, target, 1500);
   }
 });
