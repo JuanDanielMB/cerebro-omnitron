@@ -16,10 +16,17 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
-// Lógica de colores para las aristas según jerarquía
+// NUEVA LÓGICA DE COLORES (A prueba de fallos de inicialización)
 function colorDeArista(link) {
-  if (!link.source || !link.source.group) return '#ffffff';
-  switch (link.source.group) {
+  // Buscamos el nodo fuente sin importar si el motor ya lo procesó o si apenas está cargando
+  let sourceNode = link.source;
+  if (typeof link.source !== 'object' && Graph) {
+    sourceNode = Graph.graphData().nodes.find(n => n.id === link.source);
+  }
+  
+  if (!sourceNode || !sourceNode.group) return 'rgba(255, 255, 255, 0.2)'; // Blanco sutil por defecto
+  
+  switch (sourceNode.group) {
     case 'Raiz': return '#0055ff';       // Omni-Eco (Azul)
     case 'Asignatura': return '#b100ff'; // Asignaturas (Morado)
     case 'Termino': return '#000080';    // Términos (Azul Marino)
@@ -62,13 +69,19 @@ function trazarRutaAlNucleo(startNode) {
 
     const neighbors = [];
     linksArray.forEach(l => {
-      if (l.source.id === current.id && !visited.has(l.target.id)) neighbors.push(l.target);
-      if (l.target.id === current.id && !visited.has(l.source.id)) neighbors.push(l.source);
+      // Evaluamos de forma segura si la arista es un objeto o texto
+      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+
+      if (sourceId === current.id && !visited.has(targetId)) neighbors.push(typeof l.target === 'object' ? l.target : Graph.graphData().nodes.find(n => n.id === targetId));
+      if (targetId === current.id && !visited.has(sourceId)) neighbors.push(typeof l.source === 'object' ? l.source : Graph.graphData().nodes.find(n => n.id === sourceId));
     });
 
     for (let neighbor of neighbors) {
-      visited.add(neighbor.id);
-      queue.push([...path, neighbor]);
+      if (neighbor) {
+        visited.add(neighbor.id);
+        queue.push([...path, neighbor]);
+      }
     }
   }
 
@@ -77,9 +90,11 @@ function trazarRutaAlNucleo(startNode) {
     for (let i = 0; i < shortestPath.length - 1; i++) {
       const a = shortestPath[i];
       const b = shortestPath[i + 1];
-      const link = linksArray.find(l => 
-        (l.source.id === a.id && l.target.id === b.id) || (l.source.id === b.id && l.target.id === a.id)
-      );
+      const link = linksArray.find(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        return (sid === a.id && tid === b.id) || (sid === b.id && tid === a.id);
+      });
       if (link) highlightLinks.add(link);
     }
   }
@@ -94,23 +109,22 @@ function renderizarGrafo(data) {
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS JERÁRQUICAS (Sin romper la gravedad)
+    // ARISTAS JERÁRQUICAS LÁSER
     .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
-    // ELIMINADO: .linkVisibility() para evitar explosiones físicas
     .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.35; // Visibles en estado normal
-      return highlightLinks.has(link) ? 0.9 : 0.0; // 0.0 las oculta pero MANTIENE la física activa
+      if (highlightNodes.size === 0) return 0.2; // SÚPER SUTIL en estado de reposo para que no ensucie
+      return highlightLinks.has(link) ? 0.9 : 0.0; // 0.0 al enfocar un nodo, para limpiar la pantalla
     })
     .linkWidth(link => {
-      if (highlightNodes.size === 0) return 0.5; 
-      return highlightLinks.has(link) ? 1.0 : 0.0; 
+      if (highlightNodes.size === 0) return 0.3; // Hilos muy finitos por defecto
+      return highlightLinks.has(link) ? 1.5 : 0.0; // Láser grueso al hacer clic
     })
     .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 0) 
     .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
     .linkDirectionalParticleWidth(2.5)
     .linkDirectionalParticleColor(() => '#ffffff') 
 
-    // NODOS HOLOGRÁFICOS
+    // NODOS HOLOGRÁFICOS EXTRATOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.group === 'Raiz';
@@ -158,17 +172,18 @@ function renderizarGrafo(data) {
       highlightNodes.add(node);
       
       data.links.forEach(l => {
-        if (l.source.id === node.id || l.target.id === node.id) {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (sid === node.id || tid === node.id) {
           highlightLinks.add(l);
-          highlightNodes.add(l.source);
-          highlightNodes.add(l.target);
+          highlightNodes.add(typeof l.source === 'object' ? l.source : Graph.graphData().nodes.find(n => n.id === sid));
+          highlightNodes.add(typeof l.target === 'object' ? l.target : Graph.graphData().nodes.find(n => n.id === tid));
         }
       });
       
       trazarRutaAlNucleo(node);
       actualizarFiltroVisual(); 
       
-      // Matemática segura para evitar que la cámara colapse si el nodo está en el centro exacto (0,0,0)
       const dist = Math.hypot(node.x, node.y, node.z);
       const distRatio = 1 + 55 / (dist === 0 ? 0.1 : dist); 
       Graph.cameraPosition({ x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, node, 1500);
@@ -180,7 +195,7 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // Gravedad estabilizada
+  // GRAVEDAD PERFECTA
   Graph.d3Force('charge').strength(-180); 
   Graph.d3Force('link').distance(link => {
     const s = typeof link.source === 'object' ? link.source.id : link.source;
@@ -244,6 +259,7 @@ function actualizarFiltroVisual() {
     }
   });
   
+  // Recalcular estilos visuales seguros
   Graph.linkColor(Graph.linkColor())
        .linkOpacity(Graph.linkOpacity())
        .linkWidth(Graph.linkWidth())
