@@ -1,8 +1,8 @@
 // ==============================================================================
-// ECONOMITRÓN - FÍSICAS DINÁMICAS, ENTORNO LIMPIO Y COLORES MATRICIALES
+// ECONOMITRÓN - NÚCLEO PURIFICADO Y CÁLCULO TOPOLÓGICO LOCAL
 // ==============================================================================
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
 const urlSinCache = API_URL + "?t=" + new Date().getTime(); 
 
 let Graph;
@@ -16,14 +16,13 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
-// ARISTAS HEREDAN EL COLOR EXACTO DEL NODO (Columna H)
+// Extrae el color real para teñir las partículas viajeras
 function colorDeArista(link) {
   let sourceNode = link.source;
   if (typeof link.source !== 'object' && Graph) {
     sourceNode = Graph.graphData().nodes.find(n => n.id === link.source);
   }
-  // Si el nodo origen tiene color de la matriz, lo usamos. Si no, blanco translúcido.
-  return (sourceNode && sourceNode.color) ? sourceNode.color : 'rgba(255, 255, 255, 0.2)'; 
+  return (sourceNode && sourceNode.color) ? sourceNode.color : '#ffffff'; 
 }
 
 fetch(urlSinCache, { cache: "no-store" })
@@ -31,16 +30,25 @@ fetch(urlSinCache, { cache: "no-store" })
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     
-    // LIMPIEZA DE DATOS Y TAMAÑOS
+    // 1. RECALCULAR CONEXIONES LOCALMENTE (Repara el error de "Conexiones: 0")
+    data.nodes.forEach(n => n.grado = 0);
+    data.links.forEach(link => {
+      let sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      let targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      let s = data.nodes.find(n => n.id === sourceId);
+      let t = data.nodes.find(n => n.id === targetId);
+      if(s) s.grado++;
+      if(t) t.grado++;
+    });
+
+    // 2. APLICAR TAMAÑOS Y LIMPIAR COLORES (Columna H)
     data.nodes.forEach(n => {
-      // 1. Tamaños simples
       let baseSize = n.group === 'Raiz' ? 7 : (n.group === 'Asignatura' ? 4 : (n.group === 'Wormhole' ? 3 : 2));
-      n.val = baseSize * (1 + ((n.grado || 0) * 0.15));
+      n.val = baseSize * (1 + (n.grado * 0.15));
       
-      // 2. Sanitización estricta del color (Para que Three.js no lo rechace)
       let colorHex = n.color ? n.color.toString().trim() : '';
       if(colorHex === '' || colorHex === 'NaN' || colorHex === 'null') {
-        colorHex = '#ffffff'; // Fallback a blanco si la columna H está vacía
+        colorHex = '#ffffff'; 
       } else if (!colorHex.startsWith('#')) {
         colorHex = '#' + colorHex;
       }
@@ -103,23 +111,18 @@ function trazarRutaAlNucleo(startNode) {
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#000000') // Fondo negro absoluto, sin partículas
+    .backgroundColor('#000000') // Fondo abismal absoluto, sin estrellas
     .showNavInfo(false)
     .cooldownTicks(200)
     .d3AlphaDecay(0.02)
     .d3VelocityDecay(0.3)
     
-    // ARISTAS INVISIBLES Y PARTICULAS
-    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
-    .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.02; // Hilo casi invisible
-      return highlightLinks.has(link) ? 0.9 : 0.0; 
-    })
-    .linkWidth(link => {
-      if (highlightNodes.size === 0) return 0.1; 
-      return highlightLinks.has(link) ? 1.5 : 0.0; 
-    })
-    // Pulsos luminosos
+    // ARISTAS TOTALMENTE INVISIBLES EN REPOSO
+    .linkColor(link => highlightLinks.has(link) ? '#00ffff' : 'rgba(0,0,0,0)') 
+    .linkOpacity(link => highlightLinks.has(link) ? 0.9 : 0.0)
+    .linkWidth(link => highlightLinks.has(link) ? 1.5 : 0.0)
+    
+    // PULSOS LUMINOSOS HEREDAN EL COLOR DE LA COLUMNA H
     .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 1) 
     .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
     .linkDirectionalParticleWidth(2.0)
@@ -132,7 +135,6 @@ function renderizarGrafo(data) {
       
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
       
-      // Aplicamos el color extraído y sanitizado directamente de Nodos_Matriz
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
@@ -207,7 +209,6 @@ function renderizarGrafo(data) {
     return (s === 'Omni-Eco' || t === 'Omni-Eco') ? 80 : 35;
   });
 
-  // CONTROL DE CÁMARA
   const controls = Graph.controls();
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.3; 
