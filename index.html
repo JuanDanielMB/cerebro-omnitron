@@ -6,11 +6,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
-  <!-- Librerías Core (Renderizado Vectorial y Topológico) -->
+  <!-- Librerías Core (Renderizado Espacial) -->
   <script src="https://unpkg.com/three@0.136.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
-  <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+  
+  <!-- Apache ECharts (Sankey & Treemap) -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
   
@@ -31,14 +33,11 @@
     </div>
   </nav>
 
-  <!-- UX Carga -->
   <div id="loading">Sintetizando matriz topológica...</div>
 
   <!-- Vistas Dinámicas -->
   <div id="tab-3d" class="view-container active-view">
     <div id="graph-container"></div>
-    
-    <!-- HUD de Nodo -->
     <div id="info-card">
       <h4 id="card-title">Nodo</h4>
       <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
@@ -48,11 +47,11 @@
   </div>
 
   <div id="tab-sankey" class="view-container">
-    <div class="placeholder-text">Renderizador Sankey (D3.js) - Módulo en preparación.</div>
+    <div id="sankey-chart" style="width: 100vw; height: calc(100vh - 60px);"></div>
   </div>
 
   <div id="tab-treemap" class="view-container">
-    <div class="placeholder-text">Renderizador Treemap (D3.js) - Módulo en preparación.</div>
+    <div id="treemap-chart" style="width: 100vw; height: calc(100vh - 60px);"></div>
   </div>
 
   <script src="app.js"></script>
