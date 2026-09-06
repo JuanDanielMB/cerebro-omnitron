@@ -2,58 +2,61 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Cerebro Digital - Ontología Axiomática</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- Fuentes Ciberpunk -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <title>Economitrón - Diagnóstico Estructural</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
-  
-  <!-- ARCHIVO DE ESTILOS MODULAR -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- ========================================== -->
-  <!-- LIBRERÍAS EXTERNAS Y POST-PROCESAMIENTO  -->
-  <!-- ========================================== -->
-  
-  <!-- Motor 3D y Gráfos Base -->
+  <!-- Librerías Externas -->
   <script src="https://unpkg.com/three@0.136.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1.70.0/dist/3d-force-graph.min.js"></script>
   <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
 
-  <!-- Shaders y Efecto de Luz Dinámica (UnrealBloomPass) -->
+  <!-- Shaders (Bloom) -->
   <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/EffectComposer.js"></script>
   <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/RenderPass.js"></script>
   <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/shaders/CopyShader.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
   <script src="https://unpkg.com/three@0.136.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 </head>
 <body>
-  <div id="title-header">
-    <h1>Cerebro Digital</h1>
-    <span>Ontología Axiomática</span>
-  </div>
   
-  <div id="loading">Sincronizando red neuronal...</div>
+  <!-- Barra de Navegación Corporativa -->
+  <nav class="top-nav">
+    <div class="logo">
+      <h1>ECONOMITRÓN</h1>
+      <span>Sistema de Diagnóstico Visual</span>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-3d')">Topología 3D</button>
+      <button class="tab-btn" onclick="switchTab('tab-sankey')">Flujos (Sankey)</button>
+      <button class="tab-btn" onclick="switchTab('tab-treemap')">Densidad (Treemap)</button>
+    </div>
+    <div class="search-panel">
+      <input type="text" id="buscador" placeholder="Localizar nodo o término...">
+      <button id="btn-buscar">RASTREAR</button>
+    </div>
+  </nav>
 
-  <div class="search-panel">
-    <input type="text" id="buscador" placeholder="Localizar nodo o concepto...">
-    <button id="btn-buscar">ENFOCAR</button>
+  <div id="loading">Sintetizando matriz topológica...</div>
+
+  <!-- Contenedores de Vistas -->
+  <div id="tab-3d" class="view-container active-view">
+    <div id="graph-container"></div>
+    <div id="info-card">
+      <h4 id="card-title">Nodo</h4>
+      <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
+      <p><span class="highlight">Conexiones:</span> <span id="card-grado"></span></p>
+    </div>
   </div>
 
-  <div id="info-card">
-    <h4 id="card-title">Nodo</h4>
-    <p><span class="highlight">ID:</span> <span id="card-id"></span></p>
-    <p><span class="highlight">Axioma:</span> <span id="card-desc"></span></p>
-    <a id="btn-doc" href="#" target="_blank">FUENTE EN DRIVE ↗</a>
+  <div id="tab-sankey" class="view-container">
+    <div class="placeholder-text">Renderizador Sankey (D3.js) - Módulo en preparación para mapeo de flujo de capitales y requisitos.</div>
   </div>
 
-  <div id="graph-container"></div>
+  <div id="tab-treemap" class="view-container">
+    <div class="placeholder-text">Renderizador Treemap (D3.js) - Módulo en preparación para análisis volumétrico jerárquico.</div>
+  </div>
 
-  <!-- Carga del Motor Lógico -->
   <script src="app.js"></script>
 </body>
 </html>
