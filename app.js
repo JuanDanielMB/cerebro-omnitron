@@ -1,5 +1,5 @@
 // ==============================================================================
-// ECONOMITRÓN - FÍSICAS DINÁMICAS, ARISTAS INVISIBLES Y COLORES PUROS
+// ECONOMITRÓN - FÍSICAS DINÁMICAS, ENTORNO LIMPIO Y COLORES MATRICIALES
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyKF3KUVC9HpccVUocbaHojMN8DpY4WC1gwI-fTI98-0ykiHubBbt6GMUsC6Aa7zKWqRQ/exec';
@@ -16,19 +16,14 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
+// ARISTAS HEREDAN EL COLOR EXACTO DEL NODO (Columna H)
 function colorDeArista(link) {
   let sourceNode = link.source;
   if (typeof link.source !== 'object' && Graph) {
     sourceNode = Graph.graphData().nodes.find(n => n.id === link.source);
   }
-  if (!sourceNode || !sourceNode.group) return 'rgba(255, 255, 255, 0.2)'; 
-  
-  switch (sourceNode.group) {
-    case 'Raiz': return '#0055ff';       
-    case 'Asignatura': return '#b100ff'; 
-    case 'Termino': return '#000080';    
-    default: return '#ffffff';           
-  }
+  // Si el nodo origen tiene color de la matriz, lo usamos. Si no, blanco translúcido.
+  return (sourceNode && sourceNode.color) ? sourceNode.color : 'rgba(255, 255, 255, 0.2)'; 
 }
 
 fetch(urlSinCache, { cache: "no-store" })
@@ -36,12 +31,20 @@ fetch(urlSinCache, { cache: "no-store" })
   .then(data => {
     document.getElementById('loading').style.display = 'none';
     
-    // Crecimiento dinámico de la masa: tamaños base reducidos a la mitad
+    // LIMPIEZA DE DATOS Y TAMAÑOS
     data.nodes.forEach(n => {
+      // 1. Tamaños simples
       let baseSize = n.group === 'Raiz' ? 7 : (n.group === 'Asignatura' ? 4 : (n.group === 'Wormhole' ? 3 : 2));
-      // Escala volumétrica: gana 15% de tamaño adicional por cada conexión
       n.val = baseSize * (1 + ((n.grado || 0) * 0.15));
-      n.color = n.color || '#ffffff';
+      
+      // 2. Sanitización estricta del color (Para que Three.js no lo rechace)
+      let colorHex = n.color ? n.color.toString().trim() : '';
+      if(colorHex === '' || colorHex === 'NaN' || colorHex === 'null') {
+        colorHex = '#ffffff'; // Fallback a blanco si la columna H está vacía
+      } else if (!colorHex.startsWith('#')) {
+        colorHex = '#' + colorHex;
+      }
+      n.color = colorHex;
     });
 
     renderizarGrafo(data);
@@ -100,7 +103,7 @@ function trazarRutaAlNucleo(startNode) {
 function renderizarGrafo(data) {
   Graph = ForceGraph3D()(document.getElementById('graph-container'))
     .graphData(data)
-    .backgroundColor('#000000') // Fondo negro absoluto para máximo contraste
+    .backgroundColor('#000000') // Fondo negro absoluto, sin partículas
     .showNavInfo(false)
     .cooldownTicks(200)
     .d3AlphaDecay(0.02)
@@ -109,27 +112,27 @@ function renderizarGrafo(data) {
     // ARISTAS INVISIBLES Y PARTICULAS
     .linkColor(link => highlightLinks.has(link) ? '#00ffff' : colorDeArista(link)) 
     .linkOpacity(link => {
-      if (highlightNodes.size === 0) return 0.02; // Aristas prácticamente invisibles en reposo
+      if (highlightNodes.size === 0) return 0.02; // Hilo casi invisible
       return highlightLinks.has(link) ? 0.9 : 0.0; 
     })
     .linkWidth(link => {
-      if (highlightNodes.size === 0) return 0.1; // Hilo microscópico
+      if (highlightNodes.size === 0) return 0.1; 
       return highlightLinks.has(link) ? 1.5 : 0.0; 
     })
-    // Partículas luminosas viajando por el hilo invisible
+    // Pulsos luminosos
     .linkDirectionalParticles(link => highlightLinks.has(link) ? (link.type === 'bidirectional' ? 5 : 3) : 1) 
     .linkDirectionalParticleSpeed(link => link.type === 'bidirectional' ? 0.015 : 0.008)
     .linkDirectionalParticleWidth(2.0)
-    .linkDirectionalParticleColor(() => '#ffffff') 
+    .linkDirectionalParticleColor(link => highlightLinks.has(link) ? '#ffffff' : colorDeArista(link)) 
 
-    // NODOS PUROS (Sin Bloom)
+    // NODOS
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const esRaiz = node.group === 'Raiz';
       
       const geometry = new THREE.SphereGeometry(node.val * 0.8, 16, 16);
       
-      // Conservamos AdditiveBlending, pero elevamos la opacidad para asegurar que el color de la Matriz sea intenso
+      // Aplicamos el color extraído y sanitizado directamente de Nodos_Matriz
       const material = new THREE.MeshBasicMaterial({ 
         color: node.color,
         transparent: true,
@@ -193,7 +196,7 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // GRAVEDAD DINÁMICA: Aumenta la repulsión según la cantidad de conexiones del nodo
+  // GRAVEDAD DINÁMICA
   Graph.d3Force('charge').strength(node => {
     return -60 - ((node.grado || 0) * 8); 
   }); 
@@ -203,20 +206,6 @@ function renderizarGrafo(data) {
     const t = typeof link.target === 'object' ? link.target.id : link.target;
     return (s === 'Omni-Eco' || t === 'Omni-Eco') ? 80 : 35;
   });
-
-  // MICRO-ESTRELLAS
-  const starsGeo = new THREE.BufferGeometry();
-  const starsCount = 2000;
-  const posArray = new Float32Array(starsCount * 3);
-  for(let i = 0; i < starsCount * 3; i++) {
-    posArray[i] = (Math.random() - 0.5) * 3000;
-  }
-  starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-  const starsMat = new THREE.PointsMaterial({
-    size: 1.5, color: 0x55aaaa, transparent: true, opacity: 0.6, sizeAttenuation: true
-  });
-  const starMesh = new THREE.Points(starsGeo, starsMat);
-  Graph.scene().add(starMesh);
 
   // CONTROL DE CÁMARA
   const controls = Graph.controls();
@@ -229,13 +218,6 @@ function renderizarGrafo(data) {
   controls.addEventListener('end', () => { 
     if (highlightNodes.size === 0) setTimeout(() => { controls.autoRotate = true; }, 2000); 
   });
-
-  (function animarEstrellas() {
-    if (starMesh && Graph.controls().autoRotate) {
-      starMesh.rotation.y += 0.00015;
-    }
-    requestAnimationFrame(animarEstrellas);
-  })();
 }
 
 function actualizarFiltroVisual() {
@@ -255,7 +237,8 @@ function actualizarFiltroVisual() {
   Graph.linkColor(Graph.linkColor())
        .linkOpacity(Graph.linkOpacity())
        .linkWidth(Graph.linkWidth())
-       .linkDirectionalParticles(Graph.linkDirectionalParticles());
+       .linkDirectionalParticles(Graph.linkDirectionalParticles())
+       .linkDirectionalParticleColor(Graph.linkDirectionalParticleColor());
 }
 
 document.getElementById('btn-buscar').addEventListener('click', () => {
