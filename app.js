@@ -1,5 +1,5 @@
 // ==============================================================================
-// ECONOMITRÓN - FÍSICAS ESTABILIZADAS Y MASA VOLUMÉTRICA RECALIBRADA
+// ECONOMITRÓN - MAPA DE CALOR, LATIDO TÉRMICO Y ECHARTS
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
@@ -7,6 +7,20 @@ let Graph;
 let globalNodes = []; 
 const highlightNodes = new Set();
 const highlightLinks = new Set();
+
+// 1. GENERADOR DE PLASMA (AURA TÉRMICA) EN MEMORIA
+const glowTexture = (function() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, 'rgba(255,255,255, 1.0)'); // Núcleo incandescente
+  gradient.addColorStop(0.3, 'rgba(255,255,255, 0.6)'); // Corona térmica
+  gradient.addColorStop(1, 'rgba(255,255,255, 0.0)'); // Desvanecimiento absoluto
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(canvas);
+})();
 
 function switchTab(tabId) {
   document.querySelectorAll('.view-container, .tab-btn').forEach(el => el.classList.remove('active-view', 'active'));
@@ -79,10 +93,7 @@ fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
     });
 
     data.nodes.forEach(n => {
-      // 1. RECALIBRACIÓN VOLUMÉTRICA: Tamaños base más pequeños
       const baseSize = n.group === 'Raiz' ? 3.0 : (n.group === 'Asignatura' ? 2.5 : 1.5);
-      
-      // Multiplicador suavizado (0.05 en lugar de 0.15) para que el núcleo masivo no colapse la vista
       n.val = baseSize * (1 + (n.grado * 0.05));
       n.color = colorBrillante100(n.color);
       if (n.url) n.url = n.url.trim();
@@ -105,30 +116,55 @@ function renderizarGrafo(data) {
     .linkDirectionalParticleSpeed(0.008)
     .linkDirectionalParticleWidth(1.2)
     .linkDirectionalParticleColor(colorDeArista)
+    
+    // 2. CONSTRUCCIÓN DEL MAPA DE CALOR
     .nodeThreeObject(node => {
       const group = new THREE.Group();
+      
+      // Capa A: El Aura Térmica (Sprite AdditiveBlending)
+      const baseOpacity = Math.min(1.0, 0.1 + (node.grado * 0.08)); // Crece con las conexiones
+      const glowMat = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: node.color,
+        transparent: true,
+        blending: THREE.AdditiveBlending, // Mezcla de luz pura
+        depthWrite: false,
+        opacity: baseOpacity
+      });
+      const glowSprite = new THREE.Sprite(glowMat);
+      
+      // Escala del aura: Exponencial para los nodos críticos
+      const glowScale = node.val * (1.5 + (node.grado * 0.12));
+      glowSprite.scale.set(glowScale, glowScale, 1);
+      
+      // Guardamos referencias para animar luego
+      node.__glowBaseScale = glowScale;
+      node.__glowBaseOpacity = baseOpacity;
+      node.__glowSprite = glowSprite;
+
+      // Capa B: Esfera Sólida (Núcleo)
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(node.val * 0.8, 16, 16),
-        new THREE.MeshBasicMaterial({ color: node.color, opacity: 1.0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+        new THREE.MeshBasicMaterial({ color: node.color, opacity: 1.0, transparent: true, depthWrite: false })
       );
-      const sprite = new SpriteText(node.name || node.id);
-      sprite.color = 'rgba(255, 255, 255, 1.0)';
-      sprite.textHeight = node.group === 'Raiz' ? 3.0 : Math.max(1.5, node.val * 0.4);
-      sprite.position.y = (node.val * 0.8) + 2.0;
-      sprite.fontFace = "'Rajdhani', sans-serif";
-      sprite.fontWeight = '700';
+
+      // Capa C: Etiqueta
+      const spriteText = new SpriteText(node.name || node.id);
+      spriteText.color = 'rgba(255, 255, 255, 1.0)';
+      spriteText.textHeight = node.group === 'Raiz' ? 3.0 : Math.max(1.5, node.val * 0.4);
+      spriteText.position.y = (node.val * 0.8) + 2.0;
+      spriteText.fontFace = "'Rajdhani', sans-serif";
+      spriteText.fontWeight = '700';
       
-      group.add(mesh, sprite);
+      group.add(glowSprite, mesh, spriteText);
+      node.__threeGroup = group;
       return group;
     })
     .onNodeClick(node => {
       Graph.controls().autoRotate = false;
       
       const infoCard = document.getElementById('info-card');
-      if (infoCard) { 
-        infoCard.style.display = 'block'; 
-        infoCard.style.zIndex = '1000'; 
-      }
+      if (infoCard) { infoCard.style.display = 'block'; infoCard.style.zIndex = '1000'; }
       
       document.getElementById('card-title').innerText = node.name;
       document.getElementById('card-id').innerText = node.id;
@@ -181,12 +217,10 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // 2. EXPANSIÓN ORBITAL Y REPULSIÓN
-  Graph.d3Force('charge').strength(n => -100 - ((n.grado || 0) * 12)); 
+  Graph.d3Force('charge').strength(n => -80 - ((n.grado || 0) * 10)); 
   Graph.d3Force('link').distance(l => {
     const sId = typeof l.source === 'object' ? l.source.id : l.source;
     const tId = typeof l.target === 'object' ? l.target.id : l.target;
-    // Empuja las asignaturas a 160 de distancia del núcleo central
     return (sId === 'Omni-Eco' || tId === 'Omni-Eco') ? 160 : 45; 
   });
 
@@ -200,10 +234,12 @@ function actualizarFiltroVisual() {
   const hayFoco = highlightNodes.size > 0;
   
   Graph.graphData().nodes.forEach(n => {
-    if (n.__threeObj) {
+    if (n.__threeGroup) {
       const enfocado = highlightNodes.has(n);
-      n.__threeObj.children[0].material.opacity = hayFoco ? (enfocado ? 1.0 : 0.10) : 1.0;
-      n.__threeObj.children[1].material.opacity = hayFoco ? (enfocado ? 1.0 : 0.0) : 1.0;
+      // Apagamos los nodos inactivos y su aura térmica durante el foco
+      n.__threeGroup.children[0].material.opacity = hayFoco ? (enfocado ? n.__glowBaseOpacity : 0.0) : n.__glowBaseOpacity; // Aura
+      n.__threeGroup.children[1].material.opacity = hayFoco ? (enfocado ? 1.0 : 0.10) : 1.0; // Esfera sólida
+      n.__threeGroup.children[2].material.opacity = hayFoco ? (enfocado ? 1.0 : 0.0) : 1.0; // Texto
     }
   });
   
@@ -220,6 +256,42 @@ function actualizarFiltroVisual() {
        .linkDirectionalParticleColor(l => hayFoco && highlightLinks.has(l) ? '#ffffff' : colorDeArista(l));
 }
 
+// 3. EL MARCAPASOS: Lógica del Latido Térmico (Request Animation Frame)
+(function animarLatidos() {
+  requestAnimationFrame(animarLatidos);
+  if (!Graph) return;
+  
+  const time = Date.now() * 0.001; // Segundos
+  const hayFoco = highlightNodes.size > 0;
+
+  Graph.graphData().nodes.forEach(n => {
+    if (n.__glowSprite && n.__glowBaseOpacity > 0) {
+      if (hayFoco && !highlightNodes.has(n)) return; // No animar nodos apagados
+      
+      let speed, amplitude;
+      // Jerarquía de Latidos
+      if (n.group === 'Raiz') { 
+        speed = 1.0; amplitude = 0.15; // Lento y profundo (Ancla)
+      } else if (n.group === 'Asignatura') { 
+        speed = 2.5; amplitude = 0.12; // Rápido (Alto tráfico)
+      } else { 
+        speed = 0.8; amplitude = 0.05; // Periférico y sutil
+      }
+      
+      // Onda matemática de latido
+      const latido = Math.sin(time * speed) * amplitude;
+      
+      // Escalar Aura
+      const currentScale = n.__glowBaseScale * (1 + latido);
+      n.__glowSprite.scale.set(currentScale, currentScale, 1);
+      
+      // Pulsar Opacidad
+      n.__glowSprite.material.opacity = n.__glowBaseOpacity + (latido * 0.5);
+    }
+  });
+})();
+
+// ECHARTS (Sankey & Treemap)
 function renderizarECharts(data) {
   const sankeyDom = document.getElementById('sankey-chart');
   if (sankeyDom) {
