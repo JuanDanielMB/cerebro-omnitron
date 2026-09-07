@@ -1,10 +1,10 @@
 // ==============================================================================
-// ECONOMITRÓN - FÍSICAS ESTABILIZADAS, ARISTAS JERÁRQUICAS Y ECHARTS
+// ECONOMITRÓN - FÍSICAS ESTABILIZADAS Y MASA VOLUMÉTRICA RECALIBRADA
 // ==============================================================================
 
 const API_URL = 'https://script.google.com/macros/s/AKfycby6e-6mf9BN4JUnEMCeZdFLCHn6sef6rqQjn4gmQrRCQbtkLQKpbgo3oFjrVOIpVsD83g/exec';
 let Graph;
-let globalNodes = []; // <--- SALVAVIDAS: Previene el crasheo en el Tick 0
+let globalNodes = []; 
 const highlightNodes = new Set();
 const highlightLinks = new Set();
 
@@ -27,7 +27,6 @@ const colorBrillante100 = (hex) => {
   return `#${rgb.map(x => x.toString(16).padStart(2, '0')).join('')}`;
 };
 
-// Asignación de colores arquitectónicos sin depender de "Graph"
 function colorDeArista(link) {
   const sourceNode = typeof link.source === 'object' ? link.source : globalNodes.find(n => n.id === link.source);
   if (!sourceNode) return 'rgba(255, 255, 255, 0.25)';
@@ -80,14 +79,16 @@ fetch(`${API_URL}?t=${Date.now()}`, { cache: "no-store" })
     });
 
     data.nodes.forEach(n => {
-      // Tamaños base reducidos para que el núcleo no se trague el mapa
-      const baseSize = n.group === 'Raiz' ? 5 : (n.group === 'Asignatura' ? 3.5 : 2);
-      n.val = baseSize * (1 + (n.grado * 0.15));
+      // 1. RECALIBRACIÓN VOLUMÉTRICA: Tamaños base más pequeños
+      const baseSize = n.group === 'Raiz' ? 3.0 : (n.group === 'Asignatura' ? 2.5 : 1.5);
+      
+      // Multiplicador suavizado (0.05 en lugar de 0.15) para que el núcleo masivo no colapse la vista
+      n.val = baseSize * (1 + (n.grado * 0.05));
       n.color = colorBrillante100(n.color);
       if (n.url) n.url = n.url.trim();
     });
 
-    globalNodes = data.nodes; // Guardamos en memoria global segura
+    globalNodes = data.nodes; 
     renderizarGrafo(data);
     renderizarECharts(data);
   })
@@ -98,17 +99,12 @@ function renderizarGrafo(data) {
     .graphData(data)
     .backgroundColor('#000000')
     .showNavInfo(false)
-    
-    // ARISTAS VISIBLES COMO HILOS (Sin linkWidth)
     .linkColor(colorDeArista) 
     .linkOpacity(0.25)
-    
-    // FOTONES PEQUEÑOS
     .linkDirectionalParticles(2) 
     .linkDirectionalParticleSpeed(0.008)
     .linkDirectionalParticleWidth(1.2)
     .linkDirectionalParticleColor(colorDeArista)
-
     .nodeThreeObject(node => {
       const group = new THREE.Group();
       const mesh = new THREE.Mesh(
@@ -125,14 +121,13 @@ function renderizarGrafo(data) {
       group.add(mesh, sprite);
       return group;
     })
-
     .onNodeClick(node => {
       Graph.controls().autoRotate = false;
       
       const infoCard = document.getElementById('info-card');
       if (infoCard) { 
         infoCard.style.display = 'block'; 
-        infoCard.style.zIndex = '1000'; // Fuerza la UI por encima del canvas
+        infoCard.style.zIndex = '1000'; 
       }
       
       document.getElementById('card-title').innerText = node.name;
@@ -178,9 +173,7 @@ function renderizarGrafo(data) {
       const d = Math.hypot(node.x, node.y, node.z) || 0.1;
       Graph.cameraPosition({ x: node.x * (1 + 45/d), y: node.y * (1 + 45/d), z: node.z * (1 + 45/d) }, node, 1500);
     })
-    
     .onNodeDoubleClick(node => { if (node.url && node.url.startsWith('http')) window.open(node.url, '_blank'); })
-    
     .onBackgroundClick(() => {
       document.getElementById('info-card').style.display = 'none';
       highlightNodes.clear(); highlightLinks.clear();
@@ -188,12 +181,13 @@ function renderizarGrafo(data) {
       setTimeout(() => { Graph.controls().autoRotate = true; }, 800);
     });
 
-  // FÍSICAS RECALIBRADAS: Mayor distancia para que el núcleo no aplaste a los hijos
-  Graph.d3Force('charge').strength(n => -80 - ((n.grado || 0) * 10)); 
+  // 2. EXPANSIÓN ORBITAL Y REPULSIÓN
+  Graph.d3Force('charge').strength(n => -100 - ((n.grado || 0) * 12)); 
   Graph.d3Force('link').distance(l => {
     const sId = typeof l.source === 'object' ? l.source.id : l.source;
     const tId = typeof l.target === 'object' ? l.target.id : l.target;
-    return (sId === 'Omni-Eco' || tId === 'Omni-Eco') ? 120 : 40;
+    // Empuja las asignaturas a 160 de distancia del núcleo central
+    return (sId === 'Omni-Eco' || tId === 'Omni-Eco') ? 160 : 45; 
   });
 
   Graph.controls().autoRotate = true;
